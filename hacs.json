@@ -1,7 +1,6 @@
 {
   "name": "EV Guest",
   "content_in_root": false,
-  "render_readme": true,
-  "country": ["DK"],
-  "homeassistant": ">=2026.3.0"
+  "country": "DK",
+  "homeassistant": "2026.3.0"
 }
