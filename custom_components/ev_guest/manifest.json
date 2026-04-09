@@ -1,15 +1,14 @@
 {
   "domain": "ev_guest",
   "name": "EV Guest",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "documentation": "https://github.com/Dinnsen/EV-Guest",
   "issue_tracker": "https://github.com/Dinnsen/EV-Guest/issues",
   "codeowners": [
     "@Dinnsen"
   ],
   "config_flow": true,
-  "iot_class": "calculated",
-  "requirements": [],
+  "iot_class": "cloud_polling",
   "loggers": [
     "custom_components.ev_guest"
   ]

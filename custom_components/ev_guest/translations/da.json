@@ -3,96 +3,75 @@
     "step": {
       "user": {
         "title": "EV Guest",
-        "description": "Opsæt EV Guest.",
+        "description": "Set up EV Guest.",
         "data": {
-          "name": "Navn",
-          "price_entity": "Elprissensor",
-          "currency": "Valuta for ladeomkostninger",
-          "time_format": "Tidsformat",
-          "duration_format": "Format for ladetid",
-          "motorapi_api_key": "MotorAPI API-nøgle"
+          "name": "Name",
+          "price_entity": "Electricity price sensor",
+          "currency": "Charge costs currency",
+          "time_format": "Clock format",
+          "duration_format": "Charge time format",
+          "motorapi_api_key": "MotorAPI API key"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect MotorAPI",
+        "description": "Update the MotorAPI API key."
       }
     },
-    "options": {
-      "step": {
-        "init": {
-          "title": "EV Guest indstillinger",
-          "data": {
-            "price_entity": "Elprissensor",
-            "currency": "Valuta for ladeomkostninger",
-            "time_format": "Tidsformat",
-            "duration_format": "Format for ladetid",
-            "motorapi_api_key": "MotorAPI API-nøgle"
-          }
+    "error": {
+      "invalid_auth": "Invalid API key",
+      "cannot_connect": "Cannot connect to the service",
+      "timeout": "The request timed out",
+      "vehicle_not_found": "Vehicle not found",
+      "missing_api_key": "API key is required"
+    },
+    "abort": {
+      "reauth_successful": "Reauthentication was successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EV Guest options",
+        "data": {
+          "name": "Name",
+          "price_entity": "Electricity price sensor",
+          "currency": "Charge costs currency",
+          "time_format": "Clock format",
+          "duration_format": "Charge time format",
+          "motorapi_api_key": "MotorAPI API key"
         }
       }
     }
   },
   "entity": {
     "button": {
-      "grab_car_data": {
-        "name": "Hent bildata"
-      },
-      "calculate": {
-        "name": "Beregn"
-      }
+      "grab_car_data": {"name": "Grab Car Data"},
+      "calculate": {"name": "Calculate"}
     },
     "number": {
-      "soc": {
-        "name": "SoC"
-      },
-      "battery_capacity": {
-        "name": "Batterikapacitet"
-      },
-      "charger_power": {
-        "name": "Ladeeffekt"
-      },
-      "charge_limit": {
-        "name": "Ladegrænse"
-      }
+      "soc": {"name": "SoC"},
+      "battery_capacity": {"name": "Battery Capacity"},
+      "charger_power": {"name": "Charger Power"},
+      "charge_limit": {"name": "Charge Limit"}
     },
     "sensor": {
-      "charging_speed": {
-        "name": "Ladehastighed"
-      },
-      "charge_start_time": {
-        "name": "Ladestart"
-      },
-      "charge_end_time": {
-        "name": "Ladeslut"
-      },
-      "charge_time": {
-        "name": "Ladetid"
-      },
-      "charge_costs": {
-        "name": "Ladeomkostninger"
-      },
-      "car_brand": {
-        "name": "Bilfabrikat"
-      },
-      "car_model": {
-        "name": "Bilmodel"
-      },
-      "car_variant": {
-        "name": "Bilvariant"
-      },
-      "car_battery_capacity": {
-        "name": "Bilens batterikapacitet"
-      },
-      "status": {
-        "name": "Status"
-      }
+      "charging_speed": {"name": "Charging Speed"},
+      "charge_start_time": {"name": "Charge Start Time"},
+      "charge_end_time": {"name": "Charge End Time"},
+      "charge_time": {"name": "Charge Time"},
+      "charge_costs": {"name": "Charge Costs"},
+      "car_brand": {"name": "Car Brand"},
+      "car_model": {"name": "Car Model"},
+      "car_variant": {"name": "Car Variant"},
+      "car_battery_capacity": {"name": "Car Battery Capacity"},
+      "status": {"name": "Status"}
     },
     "text": {
-      "license_plate": {
-        "name": "Nummerplade"
-      }
+      "license_plate": {"name": "License Plate"}
     },
     "time": {
-      "charge_completion_time": {
-        "name": "Færdig ladet kl."
-      }
+      "charge_completion_time": {"name": "Charge Completion Time"}
     }
   }
 }

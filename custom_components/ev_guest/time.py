@@ -12,19 +12,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import INPUT_CHARGE_COMPLETION_TIME
 from .entity import EVGuestCoordinatorEntity
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator = hass.data["ev_guest"][entry.entry_id]
+    coordinator = entry.runtime_data
     async_add_entities([EVGuestCompletionTime(coordinator)])
 
 
 class EVGuestCompletionTime(EVGuestCoordinatorEntity, TimeEntity):
-    """Representation of the EV Guest completion time entity."""
-
     _attr_icon = "mdi:clock-check-outline"
 
     def __init__(self, coordinator) -> None:
-        super().__init__(coordinator, INPUT_CHARGE_COMPLETION_TIME, "Charge Completion Time")
+        super().__init__(coordinator, INPUT_CHARGE_COMPLETION_TIME)
 
     @property
     def native_value(self) -> time:

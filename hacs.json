@@ -1,8 +1,7 @@
 {
   "name": "EV Guest",
+  "content_in_root": false,
   "render_readme": true,
-  "homeassistant": "2026.3.0",
-  "country": ["DK", "DE", "SE", "NO", "NL", "BE", "FR", "US"],
-  "domains": ["ev_guest"],
-  "iot_class": "calculated"
+  "country": ["DK"],
+  "homeassistant": ">=2026.3.0"
 }

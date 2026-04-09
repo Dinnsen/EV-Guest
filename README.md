@@ -9,244 +9,186 @@ EV Guest for Home Assistant helps you find the cheapest charging window for gues
 
 The integration:
 - looks up vehicle identity from the guest's license plate
-- validates and enriches vehicle data from the VIN when available
-- matches the vehicle against an open EV dataset to estimate battery capacity
+- enriches vehicle data from the VIN when available
+- matches the vehicle against Open EV Data to estimate battery capacity
 - combines the result with a user-selected electricity price sensor to calculate the cheapest charging plan before a chosen completion time
 
-The integration creates local helper entities for guest charging input and result sensors for the final schedule.
-
-> EV Guest is a custom HACS integration for modern Home Assistant config-entry setup. It is designed to work with external electricity-price entities such as Energi Data Service.
+This package is built as a **Silver-aligned custom integration**. That means the package includes UI setup, unload support, reauthentication, entity availability handling, explicit parallel update settings, service actions, and diagnostics. The official Home Assistant Integration Quality Scale itself only applies to integrations that are reviewed in core, so this repository is **aligned with Silver requirements**, not officially certified as Silver. Home Assistant’s quality scale defines Silver as Bronze plus config-entry unloading, marking entities unavailable when appropriate, logging unavailable/back-connected events, parallel-update limits, UI reauthentication, and over 95% test coverage. citeturn549688view0
 
 ## Table of content
-
 - [Installation](#installation)
 - [Setup](#setup)
+- [Configuration options](#configuration-options)
 - [Usage](#usage)
 - [Entities](#entities)
+- [Service actions](#service-actions)
 - [Supported electricity price sensors](#supported-electricity-price-sensors)
-- [Vehicle lookup flow](#vehicle-lookup-flow)
+- [Data update behavior](#data-update-behavior)
 - [Screenshots](#screenshots)
 - [Legal information](#legal-information)
-- [Important notes](#important-notes)
+- [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
+- [Removal](#removal)
 
-# Installation:
+# Installation
 
-### Option 1 (easy) - HACS:
-
-- Ensure that HACS is installed.
+### Option 1 - HACS
+- Ensure HACS is installed.
 - Add this repository as a **custom repository** in HACS with category **Integration**.
-- Search for and install **EV Guest**.
+- Install **EV Guest**.
 - Restart Home Assistant.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.][my-ha-badge]][my-ha-url]
 
-### Option 2 - Manual installation:
-
+### Option 2 - Manual
 - Download the latest release.
-- Unpack the release and copy the `custom_components/ev_guest` directory into the `custom_components` directory of your Home Assistant installation.
+- Copy `custom_components/ev_guest` into your Home Assistant `custom_components` folder.
 - Restart Home Assistant.
 
 # Setup
 
-My Home Assistant shortcut:
-
-[![Open your Home Assistant instance and start setting up a new integration.][my-ha-add-integration-badge]][my-ha-add-integration-url]
-
-Or go to **Home Assistant > Settings > Devices & Services**.
-
-Add **EV Guest** integration.
-
-### Initial information dialog
+Add **EV Guest** from **Settings → Devices & Services**.
 
 During setup, EV Guest asks for:
+- **Name**
+- **Electricity Price Sensor**
+- **Charge Costs Currency** (`DKK`, `EUR`, `USD`)
+- **Clock format** (`24h` or `12h`)
+- **Charge Time format** (`minutes` or `hours_minutes`)
+- **MotorAPI API key**
 
-- **Name**: Friendly name for this integration instance.
-- **Electricity Price Sensor**: Select the sensor that exposes current and future electricity prices.
-- **Charge Costs Currency**: Select output currency for the cost sensor (`DKK`, `EUR`, `USD`).
-- **Clock format**: Choose `24h` or `12h` formatting for start/end sensors.
-- **Charge Time format**: Choose `minutes` or `hours_minutes` formatting for the charge time sensor.
-- **MotorAPI API key**: Used for Danish license plate and VIN lookup.
+The integration tests the MotorAPI key during setup and reauthentication. Config-flow setup through the UI and connection testing are both part of the quality-scale rules for Bronze, while Silver adds a UI reauthentication flow. citeturn549688view0
 
-No user setup is needed for the built-in **NHTSA vPIC** fallback or **Open EV Data** battery lookup.
+No user setup is needed for:
+- **NHTSA vPIC**
+- **Open EV Data**
+
+# Configuration options
+
+After setup, the options flow lets you change:
+- Electricity Price Sensor
+- Charge Costs Currency
+- Clock format
+- Charge Time format
+- MotorAPI API key
 
 # Usage
 
-After setup, the integration exposes helper entities and action buttons.
+1. Enter the plate in the license-plate text entity.
+2. Press **Grab Car Data**.
+3. Review the returned brand, model, variant, and battery estimate.
+4. Set SoC, charger power, charge limit, and completion time.
+5. Press **Calculate**.
 
-### Step 1 - Enter the license plate
-
-Fill in the text entity:
-
-- `text.<name>_license_plate`
-
-Then press:
-
-- `button.<name>_grab_car_data`
-
-EV Guest will then try to fetch and populate:
-
-- Car Brand
-- Car Model
-- Car Variant
-- Car Battery Capacity
-
-### Step 2 - Enter charging parameters
-
-Set these helper entities:
-
-- `number.<name>_soc`
-- `number.<name>_charger_power`
-- `number.<name>_charge_limit`
-- `time.<name>_charge_completion_time`
-
-If battery capacity was not matched online, you can manually set:
-
-- `number.<name>_battery_capacity`
-
-Then press:
-
-- `button.<name>_calculate`
-
-EV Guest calculates the cheapest charging slot using the selected electricity price sensor and updates the result sensors.
+If the online battery match is weak, set battery capacity manually and calculate again.
 
 # Entities
 
 ## Input/helper entities
-
-### Text
-
-- **License Plate**
-
-### Number
-
-- **SoC** (`%`)
-- **Battery Capacity** (`kWh`)
-- **Charger Power** (`kW`)
-- **Charge Limit** (`%`)
-
-### Time
-
-- **Charge Completion Time**
-
-### Buttons
-
-- **Grab Car Data**
-- **Calculate**
+- License Plate
+- SoC
+- Battery Capacity
+- Charger Power
+- Charge Limit
+- Charge Completion Time
+- Grab Car Data
+- Calculate
 
 ## Result sensors
+- Charging Speed
+- Charge Start Time
+- Charge End Time
+- Charge Time
+- Charge Costs
+- Car Brand
+- Car Model
+- Car Variant
+- Car Battery Capacity
+- Status
 
-- **Charging Speed** (`%/h`)
-- **Charge Start Time**
-- **Charge End Time**
-- **Charge Time**
-- **Charge Costs**
-- **Car Brand**
-- **Car Model**
-- **Car Variant**
-- **Car Battery Capacity** (`kWh`)
-- **Status**
+## Availability
+Vehicle-data result sensors are marked unavailable if the upstream lookup is unavailable, matching the Silver rule for marking entities unavailable when appropriate. citeturn549688view0
+
+# Service actions
+
+EV Guest registers two service actions during integration setup:
+- `ev_guest.grab_car_data`
+- `ev_guest.calculate`
+
+Both require `entry_id`.
+
+Example:
+```yaml
+service: ev_guest.calculate
+data:
+  entry_id: 1234567890abcdef
+```
 
 # Supported electricity price sensors
 
-EV Guest is built to work with sensors that expose hourly prices in attributes. The recommended example is:
+EV Guest works with sensors exposing hourly prices in one of these layouts:
+- `raw_today` / `raw_tomorrow` with `hour` + `price`
+- `today` / `tomorrow` hourly arrays
+- `forecast` with `hour` + `price`
 
-- `sensor.energi_data_service`
+The example sensor `sensor.energi_data_service` fits this pattern.
 
-The integration currently supports these attribute layouts out of the box:
+# Data update behavior
 
-- `raw_today` / `raw_tomorrow` lists of objects with `hour` and `price`
-- `today` / `tomorrow` lists of hourly prices for the current and next day
-- `forecast` list of objects with `hour` and `price`
-
-This makes it compatible with the common layout used by **Energi Data Service** and similar price sensors.
-
-# Vehicle lookup flow
-
-EV Guest uses this lookup order:
-
-1. **MotorAPI** for license plate → vehicle details + VIN
-2. **NHTSA vPIC** for VIN decoding fallback/enrichment
-3. **Open EV Data** for battery capacity matching
-
-This keeps setup simple while still allowing fully online lookup of identity and battery data.
+EV Guest listens for state changes on the selected electricity-price sensor and recalculates when needed. It also keeps a coordinator with a 30-minute refresh interval for internal state handling. Home Assistant’s diagnostics documentation also describes that integrations can expose redacted config-entry diagnostics for troubleshooting, which this package includes. citeturn549688view1
 
 # Screenshots
 
-Place your screenshots in:
-
+Place screenshots here:
 - `docs/screenshots/overview.png`
 - `docs/screenshots/setup_step_1.png`
 - `docs/screenshots/setup_step_2.png`
 - `docs/screenshots/entities.png`
 
-Suggested README section after you add them:
-
-```md
-## Screenshots
-
-### Setup
-![Setup step 1](docs/screenshots/setup_step_1.png)
-![Setup step 2](docs/screenshots/setup_step_2.png)
-
-### Usage
-![Overview](docs/screenshots/overview.png)
-![Entities](docs/screenshots/entities.png)
-```
-
 # Legal information
 
-EV Guest uses third-party data sources and is **not affiliated with, endorsed by, or maintained by** Home Assistant, MotorAPI, NHTSA, or Open EV Data.
+EV Guest is **not affiliated with, endorsed by, or maintained by** Home Assistant, MotorAPI, NHTSA, or Open EV Data.
 
-### Third-party services and datasets
+Third-party sources used:
+- MotorAPI for Danish license plate and VIN lookup
+- NHTSA vPIC for VIN decoding fallback
+- Open EV Data for battery matching
 
-- **MotorAPI** is used for Danish license plate lookups and VIN retrieval.
-- **NHTSA vPIC** is used as a public VIN decoding fallback / enrichment source.
-- **Open EV Data** is used for best-effort EV battery matching.
+Open EV Data attribution is included in this repository as required by that dataset’s license terms. The diagnostics docs also stress that passwords, API keys, tokens, location data, and personal information must not be exposed, which is why EV Guest redacts API key, VIN, and plate data in diagnostics. citeturn549688view1
 
-### Attribution
+License plates, VINs, and derived vehicle metadata may be sent to external services while lookups are performed. Users are responsible for their own API keys and third-party service usage.
 
-This project uses **Open EV Data** under its MIT License with Attribution Requirement. Attribution to **Open EV Data** is provided in this README.
+# Known limitations
 
-### Data accuracy
-
-EV Guest provides **best-effort** matching of brand, model, variant, and battery capacity.
-Vehicle variants can differ across markets and model years. Always verify matched battery data if exact charging cost estimation is important.
-
-### Privacy and API usage
-
-License plates, VINs, and derived vehicle metadata may be sent to external services in order to retrieve vehicle information.
-Users are responsible for their own MotorAPI key and for complying with the terms of any third-party services they use.
-
-# Important notes
-
-- EV Guest does **not** control a charger directly.
-- EV Guest calculates the cheapest charging window and exposes the result as sensors.
-- Currency selection changes only the output unit/currency label. It does **not** perform live FX conversion.
-- The integration assumes linear AC charging based on entered charger power and battery capacity.
-- If the online battery match is uncertain or unavailable, you should set battery capacity manually.
+- Battery matching is best effort.
+- Some variants differ across years and markets.
+- Currency selection changes the unit label only; it does not perform FX conversion.
+- Charging is calculated as a linear AC session from user-supplied charger power.
+- The package includes a tests folder and Silver-oriented structure, but I have not executed a Home Assistant test suite here, so I cannot honestly claim verified 95% test coverage yet.
 
 # Troubleshooting
 
 ### Car data not found
+- Check the plate format.
+- Check the MotorAPI key.
+- Some cars may not have a confident battery match.
 
-- Check that the license plate format is correct.
-- Verify that your MotorAPI API key is valid.
-- Some vehicles may not have a confident battery match in Open EV Data.
+### Sensors unavailable
+- The external lookup service may be down.
+- Reauthenticate the integration if the MotorAPI key has changed.
 
 ### Charge cost looks wrong
+- Confirm the selected electricity price sensor.
+- Confirm future hourly prices are present.
+- Confirm battery capacity and charger power.
 
-- Verify the selected electricity price sensor.
-- Check that the sensor provides future hourly prices.
-- Confirm that the selected currency matches the price sensor unit.
+# Removal
 
-### No valid charging window found
-
-This usually means one of the following:
-
-- Completion time is too soon.
-- Charge limit is below current SoC or already reached.
-- Not enough hourly price data is available before the completion deadline.
+To remove EV Guest:
+- Go to **Settings → Devices & Services**
+- Open **EV Guest**
+- Choose **Delete**
+- Restart Home Assistant if you installed it manually and want to remove the files from `custom_components`
 
 [releases-shield]: https://img.shields.io/github/release/Dinnsen/EV-Guest.svg?style=for-the-badge
 [releases]: https://github.com/Dinnsen/EV-Guest/releases
@@ -257,5 +199,3 @@ This usually means one of the following:
 [buymecoffee]: https://buymeacoffee.com/dinnsen
 [my-ha-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
 [my-ha-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=Dinnsen&repository=EV-Guest&category=integration
-[my-ha-add-integration-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
-[my-ha-add-integration-url]: https://my.home-assistant.io/redirect/config_flow_start/?domain=ev_guest

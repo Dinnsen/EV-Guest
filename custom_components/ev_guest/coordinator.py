@@ -12,65 +12,37 @@ from aiohttp import ClientSession
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from zoneinfo import ZoneInfo
+from homeassistant.util import dt as dt_util
 
 from .api import (
+    EVGuestAuthError,
     EVGuestLookupError,
+    VehicleLookupResult,
     async_decode_vin_nhtsa,
     async_lookup_battery_open_ev_data,
     async_lookup_vehicle_motorapi,
+    async_validate_motorapi_key,
 )
-from .const import (
-    ATTR_LAST_CALCULATION,
-    ATTR_LAST_LOOKUP,
-    ATTR_LAST_SOURCE,
-    ATTR_MODEL_YEAR,
-    ATTR_STATUS,
-    ATTR_VIN,
-    CONF_CURRENCY,
-    CONF_DURATION_FORMAT,
-    CONF_MOTORAPI_KEY,
-    CONF_PRICE_ENTITY,
-    CONF_TIME_FORMAT,
-    DEFAULT_SCAN_INTERVAL,
-    DOMAIN,
-    DURATION_FORMAT_HM,
-    DURATION_FORMAT_MINUTES,
-    INPUT_BATTERY_CAPACITY,
-    INPUT_CHARGE_COMPLETION_TIME,
-    INPUT_CHARGE_LIMIT,
-    INPUT_CHARGER_POWER,
-    INPUT_LICENSE_PLATE,
-    INPUT_SOC,
-    RESULT_CAR_BATTERY_CAPACITY,
-    RESULT_CAR_BRAND,
-    RESULT_CAR_MODEL,
-    RESULT_CAR_VARIANT,
-    RESULT_CHARGE_COSTS,
-    RESULT_CHARGE_END_TIME,
-    RESULT_CHARGE_START_TIME,
-    RESULT_CHARGE_TIME,
-    RESULT_CHARGING_SPEED,
-    RESULT_STATUS,
-    TIME_FORMAT_12H,
-)
+from .const import *
 
 _LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class EVGuestData:
     """Coordinator state."""
 
     inputs: dict[str, Any]
     results: dict[str, Any]
+    service_health: dict[str, bool]
 
 
 class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
-    """Handle EV Guest data and calculations."""
+    """Central state holder and calculator."""
 
     config_entry: ConfigEntry
 
@@ -85,6 +57,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self.config_entry = entry
         self.session: ClientSession = async_get_clientsession(hass)
         self._remove_price_listener: CALLBACK_TYPE | None = None
+        self._availability_logged: dict[str, bool] = {}
         self.data = EVGuestData(
             inputs={
                 INPUT_LICENSE_PLATE: "",
@@ -110,12 +83,24 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 ATTR_LAST_SOURCE: None,
                 ATTR_VIN: None,
                 ATTR_MODEL_YEAR: None,
+                ATTR_FUEL_TYPE: None,
+                ATTR_MATCH_SCORE: None,
             },
+            service_health={"motorapi": True, "nhtsa": True, "open_ev_data": True},
         )
 
+    @property
+    def config(self) -> dict[str, Any]:
+        return {**self.config_entry.data, **self.config_entry.options}
+
+    @property
+    def currency(self) -> str:
+        return self.config.get(CONF_CURRENCY, "DKK")
+
     async def async_initialize(self) -> None:
-        """Initialize listeners."""
-        price_entity = self.config.get(CONF_PRICE_ENTITY, self.config_entry.data[CONF_PRICE_ENTITY])
+        """Initialize coordinator and subscriptions."""
+        await self._async_validate_setup()
+        price_entity = self.config[CONF_PRICE_ENTITY]
         self._remove_price_listener = async_track_state_change_event(
             self.hass,
             [price_entity],
@@ -123,111 +108,128 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         )
         await self.async_refresh()
 
+    async def _async_validate_setup(self) -> None:
+        try:
+            await async_validate_motorapi_key(self.session, self.config[CONF_MOTORAPI_KEY])
+            self._set_service_health("motorapi", True)
+        except EVGuestAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except EVGuestLookupError as err:
+            raise ConfigEntryError(str(err)) from err
+
     async def async_shutdown(self) -> None:
-        """Shut down listeners."""
         if self._remove_price_listener:
             self._remove_price_listener()
             self._remove_price_listener = None
 
     @callback
     def _handle_price_update(self, event: Event) -> None:
-        """Recalculate when the electricity price entity changes."""
         self.hass.async_create_task(self.async_calculate())
 
     async def _async_update_data(self) -> EVGuestData:
-        """Refresh coordinator data."""
         return self.data
 
     async def async_set_input_value(self, key: str, value: Any) -> None:
-        """Set an input value and update listeners."""
         self.data.inputs[key] = value
         self.async_update_listeners()
 
+    def _set_service_health(self, service: str, available: bool) -> None:
+        current = self.data.service_health.get(service)
+        self.data.service_health[service] = available
+        if current is None or current == available:
+            return
+        if not available and not self._availability_logged.get(service, False):
+            _LOGGER.warning("%s is unavailable", service)
+            self._availability_logged[service] = True
+        elif available and self._availability_logged.get(service, False):
+            _LOGGER.info("%s is available again", service)
+            self._availability_logged[service] = False
+
     async def async_lookup_car_data(self) -> None:
-        """Look up vehicle details from external sources."""
         plate = self.data.inputs.get(INPUT_LICENSE_PLATE, "")
         if not plate:
             self.data.results[RESULT_STATUS] = "License plate is required"
             self.async_update_listeners()
             return
 
-        api_key = self.config.get(CONF_MOTORAPI_KEY, self.config_entry.data.get(CONF_MOTORAPI_KEY))
         try:
-            vehicle = await async_lookup_vehicle_motorapi(self.session, plate, api_key)
+            motor = await async_lookup_vehicle_motorapi(self.session, plate, self.config[CONF_MOTORAPI_KEY])
+            self._set_service_health("motorapi", True)
+        except EVGuestAuthError as err:
+            self._set_service_health("motorapi", False)
+            raise ConfigEntryAuthFailed(str(err)) from err
         except EVGuestLookupError as err:
+            self._set_service_health("motorapi", False if str(err) in {"cannot_connect", "timeout"} else True)
             self.data.results[RESULT_STATUS] = f"Lookup failed: {err}"
             self.async_update_listeners()
             return
 
-        vin = vehicle.get("vin")
-        brand = vehicle.get("brand")
-        model = vehicle.get("model")
-        variant = vehicle.get("variant")
-        model_year = vehicle.get("model_year")
+        decoded = None
+        if motor.vin:
+            decoded = await async_decode_vin_nhtsa(self.session, motor.vin, motor.model_year)
+            self._set_service_health("nhtsa", decoded is not None)
+        else:
+            self._set_service_health("nhtsa", True)
 
-        nhtsa = {}
-        if vin:
-            try:
-                normalized_year = int(model_year) if model_year is not None else None
-            except (TypeError, ValueError):
-                normalized_year = None
-            nhtsa = await async_decode_vin_nhtsa(self.session, vin, normalized_year)
-
-        if not brand:
-            brand = nhtsa.get("brand")
-        if not model:
-            model = nhtsa.get("model")
-        if not variant:
-            variant = nhtsa.get("variant")
-        if not model_year:
-            model_year = nhtsa.get("model_year")
-
-        battery_match = await async_lookup_battery_open_ev_data(
+        normalized = self._merge_vehicle_results(motor, decoded)
+        battery = await async_lookup_battery_open_ev_data(
             self.session,
-            brand=brand,
-            model=model,
-            variant=variant,
-            model_year=int(model_year) if str(model_year).isdigit() else None,
+            normalized.brand,
+            normalized.model,
+            normalized.variant,
+            normalized.model_year,
         )
-        battery_capacity = battery_match.get("battery_capacity")
+        self._set_service_health("open_ev_data", battery.raw is not None or battery.match_score is None)
 
-        self.data.results[RESULT_CAR_BRAND] = brand
-        self.data.results[RESULT_CAR_MODEL] = model
-        self.data.results[RESULT_CAR_VARIANT] = variant
-        self.data.results[RESULT_CAR_BATTERY_CAPACITY] = battery_capacity
+        self.data.results[RESULT_CAR_BRAND] = normalized.brand
+        self.data.results[RESULT_CAR_MODEL] = normalized.model
+        self.data.results[RESULT_CAR_VARIANT] = normalized.variant
+        self.data.results[ATTR_VIN] = normalized.vin
+        self.data.results[ATTR_MODEL_YEAR] = normalized.model_year
+        self.data.results[ATTR_FUEL_TYPE] = normalized.fuel_type
         self.data.results[ATTR_LAST_LOOKUP] = self._local_now().isoformat()
         self.data.results[ATTR_LAST_SOURCE] = ", ".join(
-            source for source in [vehicle.get("source"), nhtsa.get("source") if nhtsa else None, battery_match.get("source") if battery_match else None] if source
-        ) or None
-        self.data.results[ATTR_VIN] = vin
-        self.data.results[ATTR_MODEL_YEAR] = model_year
+            source for source in [motor.source, decoded.source if decoded else None, battery.source] if source
+        )
+        self.data.results[ATTR_MATCH_SCORE] = battery.match_score
 
-        if battery_capacity is not None:
-            self.data.inputs[INPUT_BATTERY_CAPACITY] = float(battery_capacity)
-
-        if battery_capacity is not None:
-            self.data.results[RESULT_STATUS] = "Vehicle data fetched"
+        if battery.battery_capacity is not None:
+            self.data.results[RESULT_CAR_BATTERY_CAPACITY] = round(battery.battery_capacity, 1)
+            self.data.inputs[INPUT_BATTERY_CAPACITY] = round(battery.battery_capacity, 1)
+            self.data.results[RESULT_STATUS] = "Car data loaded"
         else:
-            self.data.results[RESULT_STATUS] = "Vehicle data fetched, but battery data was not matched"
+            self.data.results[RESULT_STATUS] = "Car data loaded, battery match not confident"
+
         self.async_update_listeners()
 
+    def _merge_vehicle_results(
+        self,
+        primary: VehicleLookupResult,
+        fallback: VehicleLookupResult | None,
+    ) -> VehicleLookupResult:
+        return VehicleLookupResult(
+            plate=primary.plate,
+            vin=primary.vin or (fallback.vin if fallback else None),
+            brand=primary.brand or (fallback.brand if fallback else None),
+            model=primary.model or (fallback.model if fallback else None),
+            variant=primary.variant or (fallback.variant if fallback else None),
+            model_year=primary.model_year or (fallback.model_year if fallback else None),
+            fuel_type=primary.fuel_type or (fallback.fuel_type if fallback else None),
+            source=primary.source,
+            raw=primary.raw,
+        )
+
     async def async_calculate(self) -> None:
-        """Calculate the cheapest charge schedule."""
         try:
             calculation = self._calculate_schedule()
         except ValueError as err:
             self.data.results[RESULT_STATUS] = str(err)
             self.async_update_listeners()
             return
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.exception("Unexpected calculation error")
-            self.data.results[RESULT_STATUS] = f"Calculation failed: {err}"
-            self.async_update_listeners()
-            return
 
         self.data.results.update(calculation)
         self.data.results[ATTR_LAST_CALCULATION] = self._local_now().isoformat()
-        self.data.results[RESULT_STATUS] = "Calculation complete"
+        self.data.results[RESULT_STATUS] = "Calculation ready"
         self.async_update_listeners()
 
     def _calculate_schedule(self) -> dict[str, Any]:
@@ -258,149 +260,95 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             raise ValueError("No usable price data available from selected price sensor")
 
         now = self._local_now()
-        deadline = self._resolve_deadline(now, completion_time)
+        completion_dt = self._next_completion_datetime(now, completion_time)
+        valid_prices = [slot for slot in prices if now <= slot[0] < completion_dt]
+        hours_needed = ceil(required_hours)
+        if len(valid_prices) < hours_needed:
+            raise ValueError("Not enough future hourly prices available before completion time")
 
-        eligible_slots = [slot for slot in prices if now <= slot[0] < deadline]
-        if not eligible_slots:
-            raise ValueError("No price slots available before completion time")
-
-        slot_count = ceil(required_hours)
-        if len(eligible_slots) < slot_count:
-            raise ValueError("Not enough hourly price slots before completion time")
-
-        best_window: list[tuple[datetime, float]] | None = None
-        best_cost: float | None = None
-
-        for index in range(0, len(eligible_slots) - slot_count + 1):
-            window = eligible_slots[index : index + slot_count]
-            window_end = window[-1][0] + timedelta(hours=1)
-            if window_end > deadline:
+        cheapest_window = None
+        for index in range(0, len(valid_prices) - hours_needed + 1):
+            window = valid_prices[index : index + hours_needed]
+            if window[-1][0] + timedelta(hours=1) > completion_dt:
                 continue
+            cost = self._window_cost(window, energy_needed_kwh, required_hours)
+            if cheapest_window is None or cost < cheapest_window["cost"]:
+                cheapest_window = {
+                    "start": window[0][0],
+                    "end": window[-1][0] + timedelta(hours=1),
+                    "cost": cost,
+                }
 
-            cost = self._estimate_cost(window, energy_needed_kwh, required_hours)
-            if best_cost is None or cost < best_cost:
-                best_cost = cost
-                best_window = window
-
-        if best_window is None or best_cost is None:
-            raise ValueError("No valid charging window found before completion time")
-
-        start = best_window[0][0]
-        end = start + timedelta(minutes=charge_minutes)
+        if cheapest_window is None:
+            raise ValueError("No valid charging window found")
 
         return {
-            RESULT_CHARGING_SPEED: round(speed_pct_per_hour, 2),
-            RESULT_CHARGE_START_TIME: self._format_datetime(start),
-            RESULT_CHARGE_END_TIME: self._format_datetime(end),
+            RESULT_CHARGING_SPEED: round(speed_pct_per_hour, 1),
+            RESULT_CHARGE_START_TIME: self._format_datetime(cheapest_window["start"]),
+            RESULT_CHARGE_END_TIME: self._format_datetime(cheapest_window["end"]),
             RESULT_CHARGE_TIME: self._format_duration(charge_minutes),
-            RESULT_CHARGE_COSTS: round(best_cost, 2),
+            RESULT_CHARGE_COSTS: round(cheapest_window["cost"], 2),
         }
 
-    def _estimate_cost(
-        self,
-        window: list[tuple[datetime, float]],
-        energy_needed_kwh: float,
-        required_hours: float,
-    ) -> float:
-        remaining_energy = energy_needed_kwh
-        total_cost = 0.0
-        charger_power = float(self.data.inputs[INPUT_CHARGER_POWER])
-
-        for hour_start, price in window:
-            del hour_start
-            energy_this_hour = min(charger_power, remaining_energy)
-            total_cost += energy_this_hour * float(price)
-            remaining_energy -= energy_this_hour
-            if remaining_energy <= 0:
-                break
-
-        full_hours = int(required_hours)
-        partial_hour_fraction = required_hours - full_hours
-        if partial_hour_fraction > 0 and len(window) > full_hours:
-            last_hour_price = float(window[full_hours][1])
-            overcount_energy = charger_power * (1 - partial_hour_fraction)
-            total_cost -= overcount_energy * last_hour_price
-
-        return total_cost
-
     def _extract_price_slots(self) -> list[tuple[datetime, float]]:
-        entity_id = self.config.get(CONF_PRICE_ENTITY, self.config_entry.data[CONF_PRICE_ENTITY])
-        state = self.hass.states.get(entity_id)
-        if state is None or state.state in {STATE_UNKNOWN, STATE_UNAVAILABLE}:
-            raise ValueError("Selected electricity price sensor is unavailable")
-
-        attrs = state.attributes
-        timezone = self.hass.config.time_zone or "Europe/Copenhagen"
-        tzinfo = ZoneInfo(timezone)
+        state = self.hass.states.get(self.config[CONF_PRICE_ENTITY])
+        if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            return []
 
         slots: list[tuple[datetime, float]] = []
+        attrs = state.attributes
 
-        def parse_hourly_dicts(items: list[dict[str, Any]]) -> None:
-            for item in items:
-                hour_raw = item.get("hour")
-                price = item.get("price")
-                if hour_raw is None or price is None:
-                    continue
-                dt = datetime.fromisoformat(hour_raw)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=tzinfo)
-                else:
-                    dt = dt.astimezone(tzinfo)
-                slots.append((dt, float(price)))
-
-        if isinstance(attrs.get("raw_today"), list):
-            parse_hourly_dicts(attrs["raw_today"])
-        if isinstance(attrs.get("raw_tomorrow"), list):
-            parse_hourly_dicts(attrs["raw_tomorrow"])
-        if isinstance(attrs.get("forecast"), list):
-            parse_hourly_dicts(attrs["forecast"])
+        for row in attrs.get("raw_today", []):
+            if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
+                slots.append((dt_util.parse_datetime(row["hour"]), float(row["price"])))
+        for row in attrs.get("raw_tomorrow", []):
+            if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
+                slots.append((dt_util.parse_datetime(row["hour"]), float(row["price"])))
+        for row in attrs.get("forecast", []):
+            if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
+                slots.append((dt_util.parse_datetime(row["hour"]), float(row["price"])))
 
         if not slots and isinstance(attrs.get("today"), list):
             base = self._local_now().replace(hour=0, minute=0, second=0, microsecond=0)
-            for index, price in enumerate(attrs["today"]):
-                slots.append((base + timedelta(hours=index), float(price)))
+            for idx, price in enumerate(attrs["today"]):
+                slots.append((base + timedelta(hours=idx), float(price)))
             if isinstance(attrs.get("tomorrow"), list):
-                tomorrow_base = base + timedelta(days=1)
-                for index, price in enumerate(attrs["tomorrow"]):
-                    slots.append((tomorrow_base + timedelta(hours=index), float(price)))
+                next_base = base + timedelta(days=1)
+                for idx, price in enumerate(attrs["tomorrow"]):
+                    slots.append((next_base + timedelta(hours=idx), float(price)))
 
-        deduped: dict[datetime, float] = {}
-        for dt, price in sorted(slots, key=lambda item: item[0]):
-            deduped[dt] = price
+        return [(dt, price) for dt, price in slots if dt is not None]
 
-        return sorted(deduped.items(), key=lambda item: item[0])
-
-    def _resolve_deadline(self, now: datetime, completion_time: time) -> datetime:
-        deadline = now.replace(
-            hour=completion_time.hour,
-            minute=completion_time.minute,
-            second=0,
-            microsecond=0,
-        )
-        if deadline <= now:
-            deadline += timedelta(days=1)
-        return deadline
-
-    def _format_datetime(self, value: datetime) -> str:
-        if self.config.get(CONF_TIME_FORMAT, self.config_entry.data[CONF_TIME_FORMAT]) == TIME_FORMAT_12H:
-            return value.strftime("%I:%M %p")
-        return value.strftime("%H:%M")
-
-    def _format_duration(self, total_minutes: int) -> str | int:
-        if self.config.get(CONF_DURATION_FORMAT, self.config_entry.data[CONF_DURATION_FORMAT]) == DURATION_FORMAT_MINUTES:
-            return total_minutes
-        hours, minutes = divmod(total_minutes, 60)
-        return f"{hours}h {minutes:02d}m"
+    def _window_cost(self, window: list[tuple[datetime, float]], energy_needed_kwh: float, required_hours: float) -> float:
+        if not window:
+            return 0.0
+        energy_per_hour = energy_needed_kwh / required_hours
+        remaining = required_hours
+        total = 0.0
+        for _, price in window:
+            if remaining <= 0:
+                break
+            fraction = min(1.0, remaining)
+            total += price * energy_per_hour * fraction
+            remaining -= fraction
+        return total
 
     def _local_now(self) -> datetime:
-        timezone = self.hass.config.time_zone or "Europe/Copenhagen"
-        return datetime.now(ZoneInfo(timezone))
+        return dt_util.now()
 
-    @property
-    def config(self) -> dict[str, Any]:
-        """Return merged config and options."""
-        return {**self.config_entry.data, **self.config_entry.options}
+    def _next_completion_datetime(self, now: datetime, completion: time) -> datetime:
+        dt = now.replace(hour=completion.hour, minute=completion.minute, second=0, microsecond=0)
+        if dt <= now:
+            dt += timedelta(days=1)
+        return dt
 
-    @property
-    def currency(self) -> str:
-        return self.config.get(CONF_CURRENCY, self.config_entry.data[CONF_CURRENCY])
+    def _format_datetime(self, value: datetime) -> str:
+        if self.config.get(CONF_TIME_FORMAT) == TIME_FORMAT_12H:
+            return value.strftime("%I:%M %p").lstrip("0")
+        return value.strftime("%H:%M")
+
+    def _format_duration(self, minutes: int) -> str | int:
+        if self.config.get(CONF_DURATION_FORMAT) == DURATION_FORMAT_HM:
+            hours, rem = divmod(minutes, 60)
+            return f"{hours}h {rem}m"
+        return minutes

@@ -10,21 +10,21 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import INPUT_LICENSE_PLATE
 from .entity import EVGuestCoordinatorEntity
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator = hass.data["ev_guest"][entry.entry_id]
+    coordinator = entry.runtime_data
     async_add_entities([EVGuestText(coordinator)])
 
 
 class EVGuestText(EVGuestCoordinatorEntity, TextEntity):
-    """Representation of the EV Guest license plate text entity."""
-
     _attr_mode = TextMode.TEXT
     _attr_icon = "mdi:card-text-outline"
     _attr_native_max = 16
 
     def __init__(self, coordinator) -> None:
-        super().__init__(coordinator, INPUT_LICENSE_PLATE, "License Plate")
+        super().__init__(coordinator, INPUT_LICENSE_PLATE)
 
     @property
     def native_value(self) -> str:

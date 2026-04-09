@@ -11,15 +11,14 @@ from .coordinator import EVGuestCoordinator
 
 
 class EVGuestCoordinatorEntity(CoordinatorEntity[EVGuestCoordinator], Entity):
-    """Base entity for EV Guest."""
+    """Base entity class."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: EVGuestCoordinator, key: str, name: str) -> None:
+    def __init__(self, coordinator: EVGuestCoordinator, key: str) -> None:
         super().__init__(coordinator)
         self._key = key
         self._attr_translation_key = key
-        self._attr_name = name
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{key}"
 
     @property
