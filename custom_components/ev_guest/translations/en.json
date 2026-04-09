@@ -1,0 +1,98 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EV Guest",
+        "description": "Set up EV Guest.",
+        "data": {
+          "name": "Name",
+          "price_entity": "Electricity price sensor",
+          "currency": "Charge costs currency",
+          "time_format": "Clock format",
+          "duration_format": "Charge time format",
+          "motorapi_api_key": "MotorAPI API key"
+        }
+      }
+    },
+    "options": {
+      "step": {
+        "init": {
+          "title": "EV Guest options",
+          "data": {
+            "price_entity": "Electricity price sensor",
+            "currency": "Charge costs currency",
+            "time_format": "Clock format",
+            "duration_format": "Charge time format",
+            "motorapi_api_key": "MotorAPI API key"
+          }
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "grab_car_data": {
+        "name": "Grab Car Data"
+      },
+      "calculate": {
+        "name": "Calculate"
+      }
+    },
+    "number": {
+      "soc": {
+        "name": "SoC"
+      },
+      "battery_capacity": {
+        "name": "Battery Capacity"
+      },
+      "charger_power": {
+        "name": "Charger Power"
+      },
+      "charge_limit": {
+        "name": "Charge Limit"
+      }
+    },
+    "sensor": {
+      "charging_speed": {
+        "name": "Charging Speed"
+      },
+      "charge_start_time": {
+        "name": "Charge Start Time"
+      },
+      "charge_end_time": {
+        "name": "Charge End Time"
+      },
+      "charge_time": {
+        "name": "Charge Time"
+      },
+      "charge_costs": {
+        "name": "Charge Costs"
+      },
+      "car_brand": {
+        "name": "Car Brand"
+      },
+      "car_model": {
+        "name": "Car Model"
+      },
+      "car_variant": {
+        "name": "Car Variant"
+      },
+      "car_battery_capacity": {
+        "name": "Car Battery Capacity"
+      },
+      "status": {
+        "name": "Status"
+      }
+    },
+    "text": {
+      "license_plate": {
+        "name": "License Plate"
+      }
+    },
+    "time": {
+      "charge_completion_time": {
+        "name": "Charge Completion Time"
+      }
+    }
+  }
+}

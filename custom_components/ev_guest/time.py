@@ -1,0 +1,34 @@
+"""Time platform for EV Guest."""
+
+from __future__ import annotations
+
+from datetime import time
+
+from homeassistant.components.time import TimeEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .const import INPUT_CHARGE_COMPLETION_TIME
+from .entity import EVGuestCoordinatorEntity
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    coordinator = hass.data["ev_guest"][entry.entry_id]
+    async_add_entities([EVGuestCompletionTime(coordinator)])
+
+
+class EVGuestCompletionTime(EVGuestCoordinatorEntity, TimeEntity):
+    """Representation of the EV Guest completion time entity."""
+
+    _attr_icon = "mdi:clock-check-outline"
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, INPUT_CHARGE_COMPLETION_TIME, "Charge Completion Time")
+
+    @property
+    def native_value(self) -> time:
+        return self.coordinator.data.inputs[self._key]
+
+    async def async_set_value(self, value: time) -> None:
+        await self.coordinator.async_set_input_value(self._key, value)

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="EV Guest logo">
+  <rect width="256" height="256" rx="48" fill="#0f172a"/>
+  <path d="M58 84h74l-14 24H86v18h30l-14 24H58V84zm92 0h26c23 0 42 19 42 42s-19 42-42 42h-26V84zm26 60c10 0 18-8 18-18s-8-18-18-18h-2v36h2z" fill="#e2e8f0"/>
+  <path d="M116 196l28-44h-18l42-52-14 36h18l-32 60z" fill="#22c55e"/>
+</svg>
