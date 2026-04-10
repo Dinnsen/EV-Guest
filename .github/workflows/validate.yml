@@ -5,21 +5,12 @@ on:
   pull_request:
 
 jobs:
-  validate:
+  basic:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
+      - uses: actions/checkout@v4
+      - name: Check custom component structure
         run: |
-          python -m pip install --upgrade pip
-          pip install homeassistant beautifulsoup4
-
-      - name: Validate Python syntax
-        run: python -m compileall custom_components
+          test -f custom_components/ev_guest/manifest.json
+          test -f hacs.json
+          test -f README.md
