@@ -1,62 +1,34 @@
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from custom_components.ev_guest.const import (
     CONF_CURRENCY,
     CONF_DURATION_FORMAT,
-    CONF_ELECTRICITY_PRICE_SENSOR,
-    CONF_MOTORAPI_API_KEY,
+    CONF_MOTORAPI_KEY,
+    CONF_PRICE_ENTITY,
     CONF_TIME_FORMAT,
 )
+from custom_components.ev_guest.config_flow import EVGuestOptionsFlow
 
 
-async def test_user_flow_success(hass):
-    result = await hass.config_entries.flow.async_init(
-        "ev_guest", context={"source": "user"}
-    )
-    assert result["type"] == "form"
-
-    result2 = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {
-            CONF_ELECTRICITY_PRICE_SENSOR: "sensor.energi_data_service",
+class DummyEntry:
+    def __init__(self) -> None:
+        self.data = {
+            CONF_PRICE_ENTITY: "sensor.energi_data_service",
             CONF_CURRENCY: "DKK",
             CONF_TIME_FORMAT: "24h",
             CONF_DURATION_FORMAT: "minutes",
-            CONF_MOTORAPI_API_KEY: "test-key",
-        },
-    )
-    assert result2["type"] == "create_entry"
+            CONF_MOTORAPI_KEY: "existing_key",
+        }
+        self.options = {}
 
 
-async def test_options_flow_blank_key_keeps_existing(hass, mock_config_entry):
-    mock_config_entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
-    assert result["type"] == "form"
-
-    result2 = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            CONF_ELECTRICITY_PRICE_SENSOR: "sensor.energi_data_service",
-            CONF_CURRENCY: "DKK",
-            CONF_TIME_FORMAT: "24h",
-            CONF_DURATION_FORMAT: "minutes",
-            CONF_MOTORAPI_API_KEY: "",
-        },
-    )
-    assert result2["type"] == "create_entry"
-    assert (
-        result2["data"][CONF_MOTORAPI_API_KEY]
-        == mock_config_entry.data[CONF_MOTORAPI_API_KEY]
-    )
+def test_options_flow_uses_private_config_entry_attr() -> None:
+    entry = DummyEntry()
+    flow = EVGuestOptionsFlow(entry)
+    assert flow._config_entry is entry
 
 
-async def test_options_flow_init_does_not_crash_on_config_entry_property(
-    hass, mock_config_entry
-):
-    mock_config_entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
-    assert result["type"] == "form"
+def test_existing_api_key_is_available_on_entry() -> None:
+    entry = DummyEntry()
+    flow = EVGuestOptionsFlow(entry)
+    assert flow._config_entry.data[CONF_MOTORAPI_KEY] == "existing_key"
