@@ -6,7 +6,6 @@ import logging
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -30,13 +29,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         coordinator = _get_coordinator(hass, call.data["entry_id"])
         await coordinator.async_calculate()
 
-    hass.services.async_register(DOMAIN, SERVICE_GRAB_CAR_DATA, _handle_grab, schema=SERVICE_SCHEMA)
-    hass.services.async_register(DOMAIN, SERVICE_CALCULATE, _handle_calculate, schema=SERVICE_SCHEMA)
+    if not hass.services.has_service(DOMAIN, SERVICE_GRAB_CAR_DATA):
+        hass.services.async_register(DOMAIN, SERVICE_GRAB_CAR_DATA, _handle_grab, schema=SERVICE_SCHEMA)
+    if not hass.services.has_service(DOMAIN, SERVICE_CALCULATE):
+        hass.services.async_register(DOMAIN, SERVICE_CALCULATE, _handle_calculate, schema=SERVICE_SCHEMA)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up EV Guest from a config entry."""
     coordinator = EVGuestCoordinator(hass, entry)
     await coordinator.async_initialize()
     entry.runtime_data = coordinator
@@ -46,7 +46,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         coordinator: EVGuestCoordinator = entry.runtime_data
@@ -55,7 +54,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle removal of config entry."""
     _LOGGER.debug("Removing EV Guest entry %s", entry.entry_id)
 
 
@@ -64,10 +62,9 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    if entry.version == 1:
-        entry.version = 2
+    if entry.version < 3:
+        entry.version = 3
     return True
-
 
 
 def _get_coordinator(hass: HomeAssistant, entry_id: str) -> EVGuestCoordinator:

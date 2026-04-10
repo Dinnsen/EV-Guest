@@ -6,18 +6,15 @@ from datetime import time
 from unittest.mock import MagicMock
 
 import pytest
-from homeassistant.util import dt as dt_util
 
 from custom_components.ev_guest.api import VehicleLookupResult
 from custom_components.ev_guest.const import (
-    ATTR_FUEL_TYPE,
-    ATTR_MODEL_YEAR,
-    ATTR_VIN,
     INPUT_BATTERY_CAPACITY,
     INPUT_CHARGE_COMPLETION_TIME,
     INPUT_CHARGE_LIMIT,
     INPUT_CHARGER_POWER,
     INPUT_SOC,
+    INPUT_USE_COMPLETION_TIME,
     RESULT_CHARGE_COSTS,
     RESULT_CHARGE_END_TIME,
     RESULT_CHARGE_START_TIME,
@@ -29,7 +26,6 @@ from custom_components.ev_guest.coordinator import EVGuestCoordinator
 
 @pytest.fixture
 def coordinator(mock_hass, mock_config_entry, fixed_now, monkeypatch) -> EVGuestCoordinator:
-    """Create a coordinator with a mocked HTTP session."""
     monkeypatch.setattr(
         "custom_components.ev_guest.coordinator.async_get_clientsession",
         lambda hass: MagicMock(),
@@ -80,9 +76,14 @@ def test_format_duration_returns_hours_and_minutes_when_configured(coordinator: 
     assert coordinator._format_duration(131) == "2h 11m"
 
 
-def test_next_completion_datetime_moves_to_next_day_when_time_has_passed(coordinator: EVGuestCoordinator, fixed_now) -> None:
-    result = coordinator._next_completion_datetime(fixed_now, time(hour=7, minute=0))
-    assert result.isoformat() == "2026-04-10T07:00:00+02:00"
+def test_completion_time_parsing_and_formatting(coordinator: EVGuestCoordinator) -> None:
+    coordinator.config_entry.options = {"time_format": "24h"}
+    assert coordinator.get_completion_time_text() == "07:00"
+    assert coordinator._parse_completion_time("10:15 PM") == time(hour=22, minute=15)
+
+    coordinator.config_entry.options = {"time_format": "12h"}
+    coordinator.data.inputs[INPUT_CHARGE_COMPLETION_TIME] = "22:15"
+    assert coordinator.get_completion_time_text() == "10:15 PM"
 
 
 def test_calculate_schedule_finds_cheapest_window_from_price_slots(coordinator: EVGuestCoordinator) -> None:
@@ -92,7 +93,8 @@ def test_calculate_schedule_finds_cheapest_window_from_price_slots(coordinator: 
             INPUT_BATTERY_CAPACITY: 77,
             INPUT_CHARGER_POWER: 11,
             INPUT_CHARGE_LIMIT: 80,
-            INPUT_CHARGE_COMPLETION_TIME: time(hour=7, minute=0),
+            INPUT_CHARGE_COMPLETION_TIME: "07:00",
+            INPUT_USE_COMPLETION_TIME: True,
         }
     )
     coordinator.hass.states.get.return_value = MagicMock(
@@ -121,7 +123,7 @@ def test_calculate_schedule_finds_cheapest_window_from_price_slots(coordinator: 
     assert result[RESULT_CHARGING_SPEED] == pytest.approx(14.3, rel=1e-2)
     assert result[RESULT_CHARGE_TIME] == 252
     assert result[RESULT_CHARGE_START_TIME] == "22:00"
-    assert result[RESULT_CHARGE_END_TIME] == "02:00"
+    assert result[RESULT_CHARGE_END_TIME] == "02:12"
     assert result[RESULT_CHARGE_COSTS] == pytest.approx(17.09, rel=1e-2)
 
 
@@ -132,7 +134,7 @@ def test_calculate_schedule_raises_when_charge_limit_is_not_above_soc(coordinato
             INPUT_BATTERY_CAPACITY: 77,
             INPUT_CHARGER_POWER: 11,
             INPUT_CHARGE_LIMIT: 80,
-            INPUT_CHARGE_COMPLETION_TIME: time(hour=7, minute=0),
+            INPUT_CHARGE_COMPLETION_TIME: "07:00",
         }
     )
 

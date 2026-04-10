@@ -199,3 +199,12 @@ To remove EV Guest:
 [buymecoffee]: https://buymeacoffee.com/dinnsen
 [my-ha-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
 [my-ha-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=Dinnsen&repository=EV-Guest&category=integration
+
+## Changelog
+
+### v0.3.1
+- Added missing input entities for SoC, Charger Power, Charge Limit, completion time and completion toggle.
+- Reworked completion time input to follow the selected 12h/24h format.
+- Fixed options/configure flow.
+- Fixed local brand images by shipping PNG assets.
+- Added tests to the package.

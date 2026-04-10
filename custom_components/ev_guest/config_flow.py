@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-from aiohttp import ClientSession
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import aiohttp_client, selector
@@ -25,7 +24,7 @@ from .const import (
 )
 
 
-def _schema(defaults: dict[str, Any]) -> vol.Schema:
+def _user_schema(defaults: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required("name", default=defaults.get("name", DEFAULT_NAME)): str,
@@ -33,37 +32,52 @@ def _schema(defaults: dict[str, Any]) -> vol.Schema:
                 selector.EntitySelectorConfig(domain="sensor")
             ),
             vol.Required(CONF_CURRENCY, default=defaults.get(CONF_CURRENCY, "DKK")): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=CURRENCIES, mode=selector.SelectSelectorMode.DROPDOWN)
+                selector.SelectSelectorConfig(options=CURRENCIES)
             ),
             vol.Required(CONF_TIME_FORMAT, default=defaults.get(CONF_TIME_FORMAT, "24h")): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=TIME_FORMATS, mode=selector.SelectSelectorMode.DROPDOWN)
+                selector.SelectSelectorConfig(options=TIME_FORMATS)
             ),
-            vol.Required(
-                CONF_DURATION_FORMAT,
-                default=defaults.get(CONF_DURATION_FORMAT, "minutes"),
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=DURATION_FORMATS, mode=selector.SelectSelectorMode.DROPDOWN)
+            vol.Required(CONF_DURATION_FORMAT, default=defaults.get(CONF_DURATION_FORMAT, "minutes")): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=DURATION_FORMATS)
             ),
-            vol.Required(CONF_MOTORAPI_KEY, default=defaults.get(CONF_MOTORAPI_KEY, "")): selector.TextSelector(
-                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-            ),
+            vol.Required(CONF_MOTORAPI_KEY, default=defaults.get(CONF_MOTORAPI_KEY, "")): str,
         }
     )
 
 
-async def _validate_input(session: ClientSession, data: dict[str, Any]) -> None:
-    await async_validate_motorapi_key(session, data[CONF_MOTORAPI_KEY])
+def _options_schema(defaults: dict[str, Any]) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_PRICE_ENTITY, default=defaults.get(CONF_PRICE_ENTITY)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            ),
+            vol.Required(CONF_CURRENCY, default=defaults.get(CONF_CURRENCY, "DKK")): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=CURRENCIES)
+            ),
+            vol.Required(CONF_TIME_FORMAT, default=defaults.get(CONF_TIME_FORMAT, "24h")): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=TIME_FORMATS)
+            ),
+            vol.Required(CONF_DURATION_FORMAT, default=defaults.get(CONF_DURATION_FORMAT, "minutes")): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=DURATION_FORMATS)
+            ),
+            vol.Optional(CONF_MOTORAPI_KEY, default=""): str,
+        }
+    )
+
+
+async def _validate_api_key(hass, api_key: str) -> None:
+    session = aiohttp_client.async_get_clientsession(hass)
+    await async_validate_motorapi_key(session, api_key)
 
 
 class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 2
+    VERSION = 3
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
-            session = aiohttp_client.async_get_clientsession(self.hass)
             try:
-                await _validate_input(session, user_input)
+                await _validate_api_key(self.hass, user_input[CONF_MOTORAPI_KEY])
             except EVGuestAuthError:
                 errors["base"] = "invalid_auth"
             except EVGuestLookupError as err:
@@ -73,7 +87,7 @@ class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=user_input["name"], data=user_input)
 
-        return self.async_show_form(step_id="user", data_schema=_schema({}), errors=errors)
+        return self.async_show_form(step_id="user", data_schema=_user_schema({}), errors=errors)
 
     async def async_step_reauth(self, entry_data: dict[str, Any]):
         self._reauth_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
@@ -82,9 +96,8 @@ class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
-            session = aiohttp_client.async_get_clientsession(self.hass)
             try:
-                await async_validate_motorapi_key(session, user_input[CONF_MOTORAPI_KEY])
+                await _validate_api_key(self.hass, user_input[CONF_MOTORAPI_KEY])
             except EVGuestAuthError:
                 errors["base"] = "invalid_auth"
             except EVGuestLookupError as err:
@@ -100,13 +113,7 @@ class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_MOTORAPI_KEY): selector.TextSelector(
-                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                    )
-                }
-            ),
+            data_schema=vol.Schema({vol.Required(CONF_MOTORAPI_KEY): str}),
             errors=errors,
         )
 
@@ -123,15 +130,16 @@ class EVGuestOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         current = {**self.config_entry.data, **self.config_entry.options}
         if user_input is not None:
-            session = aiohttp_client.async_get_clientsession(self.hass)
+            merged = {**current, **user_input}
+            if not user_input.get(CONF_MOTORAPI_KEY):
+                merged[CONF_MOTORAPI_KEY] = current[CONF_MOTORAPI_KEY]
             try:
-                await _validate_input(session, {**current, **user_input})
+                await _validate_api_key(self.hass, merged[CONF_MOTORAPI_KEY])
             except EVGuestAuthError:
                 errors["base"] = "invalid_auth"
             except EVGuestLookupError as err:
                 errors["base"] = str(err)
             else:
-                user_input.pop("name", None)
-                return self.async_create_entry(title="", data=user_input)
+                return self.async_create_entry(title="", data=merged)
 
-        return self.async_show_form(step_id="init", data_schema=_schema(current), errors=errors)
+        return self.async_show_form(step_id="init", data_schema=_options_schema(current), errors=errors)

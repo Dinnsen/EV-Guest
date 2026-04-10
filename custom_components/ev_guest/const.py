@@ -6,9 +6,9 @@ from datetime import timedelta
 
 DOMAIN = "ev_guest"
 DEFAULT_NAME = "EV Guest"
-PLATFORMS = ["sensor", "button", "number", "text", "time"]
+PLATFORMS = ["sensor", "button", "number", "text", "switch"]
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=30)
-USER_AGENT = "EVGuestHomeAssistant/0.3.0 (+https://github.com/Dinnsen/EV-Guest)"
+USER_AGENT = "EVGuestHomeAssistant/0.3.1 (+https://github.com/Dinnsen/EV-Guest)"
 
 MOTORAPI_BASE_URL = "https://v1.motorapi.dk"
 NHTSA_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/{vin}?format=json"
@@ -36,6 +36,7 @@ INPUT_BATTERY_CAPACITY = "battery_capacity"
 INPUT_CHARGER_POWER = "charger_power"
 INPUT_CHARGE_LIMIT = "charge_limit"
 INPUT_CHARGE_COMPLETION_TIME = "charge_completion_time"
+INPUT_USE_COMPLETION_TIME = "use_completion_time"
 
 RESULT_CHARGING_SPEED = "charging_speed"
 RESULT_CHARGE_START_TIME = "charge_start_time"

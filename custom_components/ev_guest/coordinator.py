@@ -27,7 +27,41 @@ from .api import (
     async_lookup_vehicle_motorapi,
     async_validate_motorapi_key,
 )
-from .const import *
+from .const import (
+    ATTR_FUEL_TYPE,
+    ATTR_LAST_CALCULATION,
+    ATTR_LAST_LOOKUP,
+    ATTR_LAST_SOURCE,
+    ATTR_MATCH_SCORE,
+    ATTR_MODEL_YEAR,
+    ATTR_VIN,
+    CONF_CURRENCY,
+    CONF_DURATION_FORMAT,
+    CONF_MOTORAPI_KEY,
+    CONF_PRICE_ENTITY,
+    CONF_TIME_FORMAT,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    DURATION_FORMAT_HM,
+    INPUT_BATTERY_CAPACITY,
+    INPUT_CHARGE_COMPLETION_TIME,
+    INPUT_CHARGE_LIMIT,
+    INPUT_CHARGER_POWER,
+    INPUT_LICENSE_PLATE,
+    INPUT_SOC,
+    INPUT_USE_COMPLETION_TIME,
+    RESULT_CAR_BATTERY_CAPACITY,
+    RESULT_CAR_BRAND,
+    RESULT_CAR_MODEL,
+    RESULT_CAR_VARIANT,
+    RESULT_CHARGE_COSTS,
+    RESULT_CHARGE_END_TIME,
+    RESULT_CHARGE_START_TIME,
+    RESULT_CHARGE_TIME,
+    RESULT_CHARGING_SPEED,
+    RESULT_STATUS,
+    TIME_FORMAT_12H,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +99,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 INPUT_BATTERY_CAPACITY: 77.0,
                 INPUT_CHARGER_POWER: 11.0,
                 INPUT_CHARGE_LIMIT: 80.0,
-                INPUT_CHARGE_COMPLETION_TIME: time(hour=7, minute=0),
+                INPUT_CHARGE_COMPLETION_TIME: "07:00",
+                INPUT_USE_COMPLETION_TIME: True,
             },
             results={
                 RESULT_CHARGING_SPEED: None,
@@ -98,7 +133,6 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         return self.config.get(CONF_CURRENCY, "DKK")
 
     async def async_initialize(self) -> None:
-        """Initialize coordinator and subscriptions."""
         await self._async_validate_setup()
         price_entity = self.config[CONF_PRICE_ENTITY]
         self._remove_price_listener = async_track_state_change_event(
@@ -130,8 +164,37 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         return self.data
 
     async def async_set_input_value(self, key: str, value: Any) -> None:
+        if key == INPUT_CHARGE_COMPLETION_TIME:
+            parsed = self._parse_completion_time(value)
+            if parsed is None:
+                self.data.results[RESULT_STATUS] = "Invalid completion time"
+                self.async_update_listeners()
+                return
+            value = self._format_time_for_input(parsed)
         self.data.inputs[key] = value
         self.async_update_listeners()
+
+    def get_completion_time_text(self) -> str:
+        parsed = self._parse_completion_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME, "07:00"))
+        return self._format_time_for_input(parsed or time(hour=7, minute=0))
+
+    def _format_time_for_input(self, value: time) -> str:
+        if self.config.get(CONF_TIME_FORMAT) == TIME_FORMAT_12H:
+            return value.strftime("%I:%M %p").lstrip("0")
+        return value.strftime("%H:%M")
+
+    def _parse_completion_time(self, value: Any) -> time | None:
+        if isinstance(value, time):
+            return value
+        if value is None:
+            return None
+        text = str(value).strip()
+        for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p"):
+            try:
+                return datetime.strptime(text, fmt).time()
+            except ValueError:
+                continue
+        return None
 
     def _set_service_health(self, service: str, available: bool) -> None:
         current = self.data.service_health.get(service)
@@ -237,7 +300,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         battery_capacity = float(self.data.inputs[INPUT_BATTERY_CAPACITY])
         charger_power = float(self.data.inputs[INPUT_CHARGER_POWER])
         charge_limit = float(self.data.inputs[INPUT_CHARGE_LIMIT])
-        completion_time: time = self.data.inputs[INPUT_CHARGE_COMPLETION_TIME]
+        use_completion_time = bool(self.data.inputs.get(INPUT_USE_COMPLETION_TIME, True))
+        completion_time = self._parse_completion_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME))
 
         if battery_capacity <= 0:
             raise ValueError("Battery capacity must be above 0")
@@ -249,6 +313,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             raise ValueError("Charge limit must be between 0 and 100")
         if charge_limit <= soc:
             raise ValueError("Charge limit must be above current SoC")
+        if use_completion_time and completion_time is None:
+            raise ValueError("Completion time is invalid")
 
         speed_pct_per_hour = (charger_power / battery_capacity) * 100
         energy_needed_kwh = battery_capacity * ((charge_limit - soc) / 100)
@@ -260,22 +326,27 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             raise ValueError("No usable price data available from selected price sensor")
 
         now = self._local_now()
-        completion_dt = self._next_completion_datetime(now, completion_time)
-        valid_prices = [slot for slot in prices if now <= slot[0] < completion_dt]
+        valid_prices = [slot for slot in prices if now <= slot[0]]
         hours_needed = ceil(required_hours)
+        completion_dt = None
+        if use_completion_time:
+            completion_dt = self._next_completion_datetime(now, completion_time)
+            valid_prices = [slot for slot in valid_prices if slot[0] < completion_dt]
+            if len(valid_prices) < hours_needed:
+                raise ValueError("Not enough future hourly prices available before completion time")
         if len(valid_prices) < hours_needed:
-            raise ValueError("Not enough future hourly prices available before completion time")
+            raise ValueError("Not enough future hourly prices available")
 
         cheapest_window = None
         for index in range(0, len(valid_prices) - hours_needed + 1):
             window = valid_prices[index : index + hours_needed]
-            if window[-1][0] + timedelta(hours=1) > completion_dt:
+            if use_completion_time and completion_dt and window[-1][0] + timedelta(hours=1) > completion_dt:
                 continue
             cost = self._window_cost(window, energy_needed_kwh, required_hours)
             if cheapest_window is None or cost < cheapest_window["cost"]:
                 cheapest_window = {
                     "start": window[0][0],
-                    "end": window[-1][0] + timedelta(hours=1),
+                    "end": window[0][0] + timedelta(minutes=charge_minutes),
                     "cost": cost,
                 }
 
@@ -298,15 +369,12 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         slots: list[tuple[datetime, float]] = []
         attrs = state.attributes
 
-        for row in attrs.get("raw_today", []):
-            if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
-                slots.append((dt_util.parse_datetime(row["hour"]), float(row["price"])))
-        for row in attrs.get("raw_tomorrow", []):
-            if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
-                slots.append((dt_util.parse_datetime(row["hour"]), float(row["price"])))
-        for row in attrs.get("forecast", []):
-            if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
-                slots.append((dt_util.parse_datetime(row["hour"]), float(row["price"])))
+        for key in ("raw_today", "raw_tomorrow", "forecast"):
+            for row in attrs.get(key, []):
+                if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
+                    dt = dt_util.parse_datetime(str(row["hour"]))
+                    if dt is not None:
+                        slots.append((dt, float(row["price"])))
 
         if not slots and isinstance(attrs.get("today"), list):
             base = self._local_now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -317,7 +385,10 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 for idx, price in enumerate(attrs["tomorrow"]):
                     slots.append((next_base + timedelta(hours=idx), float(price)))
 
-        return [(dt, price) for dt, price in slots if dt is not None]
+        deduped: dict[str, tuple[datetime, float]] = {}
+        for dt, price in slots:
+            deduped[dt.isoformat()] = (dt, price)
+        return [deduped[key] for key in sorted(deduped.keys())]
 
     def _window_cost(self, window: list[tuple[datetime, float]], energy_needed_kwh: float, required_hours: float) -> float:
         if not window:

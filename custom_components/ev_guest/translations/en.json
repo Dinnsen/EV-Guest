@@ -33,8 +33,8 @@
     "step": {
       "init": {
         "title": "EV Guest options",
+        "description": "Leave the MotorAPI API key empty to keep the current one.",
         "data": {
-          "name": "Name",
           "price_entity": "Electricity price sensor",
           "currency": "Charge costs currency",
           "time_format": "Clock format",
@@ -46,32 +46,71 @@
   },
   "entity": {
     "button": {
-      "grab_car_data": {"name": "Grab Car Data"},
-      "calculate": {"name": "Calculate"}
+      "grab_car_data": {
+        "name": "Grab Car Data"
+      },
+      "calculate": {
+        "name": "Calculate"
+      }
     },
     "number": {
-      "soc": {"name": "SoC"},
-      "battery_capacity": {"name": "Battery Capacity"},
-      "charger_power": {"name": "Charger Power"},
-      "charge_limit": {"name": "Charge Limit"}
+      "soc": {
+        "name": "SoC"
+      },
+      "battery_capacity": {
+        "name": "Battery Capacity"
+      },
+      "charger_power": {
+        "name": "Charger Power"
+      },
+      "charge_limit": {
+        "name": "Charge Limit"
+      }
     },
     "sensor": {
-      "charging_speed": {"name": "Charging Speed"},
-      "charge_start_time": {"name": "Charge Start Time"},
-      "charge_end_time": {"name": "Charge End Time"},
-      "charge_time": {"name": "Charge Time"},
-      "charge_costs": {"name": "Charge Costs"},
-      "car_brand": {"name": "Car Brand"},
-      "car_model": {"name": "Car Model"},
-      "car_variant": {"name": "Car Variant"},
-      "car_battery_capacity": {"name": "Car Battery Capacity"},
-      "status": {"name": "Status"}
+      "charging_speed": {
+        "name": "Charging Speed"
+      },
+      "charge_start_time": {
+        "name": "Charge Start Time"
+      },
+      "charge_end_time": {
+        "name": "Charge End Time"
+      },
+      "charge_time": {
+        "name": "Charge Time"
+      },
+      "charge_costs": {
+        "name": "Charge Costs"
+      },
+      "car_brand": {
+        "name": "Car Brand"
+      },
+      "car_model": {
+        "name": "Car Model"
+      },
+      "car_variant": {
+        "name": "Car Variant"
+      },
+      "car_battery_capacity": {
+        "name": "Car Battery Capacity"
+      },
+      "status": {
+        "name": "Status"
+      }
     },
     "text": {
-      "license_plate": {"name": "License Plate"}
+      "license_plate": {
+        "name": "License Plate"
+      },
+      "charge_completion_time": {
+        "name": "Charge Completion Time"
+      }
     },
-    "time": {
-      "charge_completion_time": {"name": "Charge Completion Time"}
+    "switch": {
+      "use_completion_time": {
+        "name": "Use Charge Completion Time"
+      }
     }
   }
 }
