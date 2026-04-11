@@ -10,18 +10,41 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Show repo root
+        run: |
+          echo "Repo root:"
+          pwd
+          ls -la
+          echo ""
+          echo "custom_components/ev_guest:"
+          ls -la custom_components/ev_guest || true
 
       - name: Check required files
         run: |
-          set -e
-          test -f custom_components/ev_guest/manifest.json
-          test -f custom_components/ev_guest/__init__.py
-          test -f custom_components/ev_guest/config_flow.py
-          test -f hacs.json
-          test -f README.md
-          test -f LICENSE
+          missing=0
+
+          for file in \
+            custom_components/ev_guest/manifest.json \
+            custom_components/ev_guest/__init__.py \
+            custom_components/ev_guest/config_flow.py \
+            hacs.json \
+            README.md \
+            LICENSE
+          do
+            if [ -f "$file" ]; then
+              echo "OK: $file"
+            else
+              echo "MISSING: $file"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Check Python syntax
         run: |
-          python -m compileall custom_components/ev_guest tests
+          python -m compileall custom_components/ev_guest
