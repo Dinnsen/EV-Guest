@@ -20,12 +20,9 @@ class EVGuestCoordinatorEntity(CoordinatorEntity[EVGuestCoordinator], Entity):
         self._key = key
         self._attr_translation_key = key
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{key}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.config_entry.entry_id)},
-            name=self.coordinator.config_entry.title,
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
+            name=coordinator.config_entry.title,
             manufacturer="Dinnsen",
             model="EV Guest",
             configuration_url="https://github.com/Dinnsen/EV-Guest",

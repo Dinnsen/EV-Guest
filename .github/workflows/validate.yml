@@ -25,13 +25,7 @@ jobs:
         run: |
           missing=0
 
-          for file in \
-            custom_components/ev_guest/manifest.json \
-            custom_components/ev_guest/__init__.py \
-            custom_components/ev_guest/config_flow.py \
-            hacs.json \
-            README.md \
-            LICENSE
+          for file in                 custom_components/ev_guest/manifest.json                 custom_components/ev_guest/__init__.py                 custom_components/ev_guest/config_flow.py                 custom_components/ev_guest/coordinator.py                 custom_components/ev_guest/services.yaml                 hacs.json                 README.md                 LICENSE
           do
             if [ -f "$file" ]; then
               echo "OK: $file"
@@ -47,4 +41,4 @@ jobs:
 
       - name: Check Python syntax
         run: |
-          python -m compileall custom_components/ev_guest
+          python -m compileall custom_components/ev_guest tests

@@ -5,7 +5,32 @@ grab_car_data:
       example: "1234abcd"
       selector:
         text:
+
 calculate:
+  fields:
+    entry_id:
+      required: true
+      example: "1234abcd"
+      selector:
+        text:
+
+force_start_charger:
+  fields:
+    entry_id:
+      required: true
+      example: "1234abcd"
+      selector:
+        text:
+
+force_stop_charger:
+  fields:
+    entry_id:
+      required: true
+      example: "1234abcd"
+      selector:
+        text:
+
+resync_charger_plan:
   fields:
     entry_id:
       required: true

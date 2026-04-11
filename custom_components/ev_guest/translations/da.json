@@ -3,122 +3,112 @@
     "step": {
       "user": {
         "title": "EV Guest",
-        "description": "Set up EV Guest.",
+        "description": "Opsæt EV Guest til gæste-elbiler og valgfri ladestyring.",
         "data": {
-          "name": "Name",
-          "price_entity": "Elpris-sensor",
+          "name": "Navn",
+          "language": "Sprog",
+          "country": "Land",
+          "price_entity": "Elprissensor",
           "currency": "Valuta for ladeomkostning",
           "time_format": "Tidsformat",
           "duration_format": "Format for ladetid",
-          "motorapi_api_key": "MotorAPI API-n\u00f8gle",
-          "charger_switch_entity": "Lader-switch entity"
+          "motorapi_api_key": "API-nøgle til nummerpladesøgning",
+          "charger_backend": "Ladeprofil",
+          "charger_switch_entity": "Lader-entity",
+          "charger_status_entity": "Status-entity for lader",
+          "charger_start_service": "Override for start-service",
+          "charger_stop_service": "Override for stop-service",
+          "charger_start_data": "Data til start-service (JSON)",
+          "charger_stop_data": "Data til stop-service (JSON)"
         }
       },
       "reauth_confirm": {
-        "title": "Genforbind MotorAPI",
-        "description": "Opdater MotorAPI API-n\u00f8glen."
+        "title": "Genforbind EV Guest",
+        "description": "Opdater API-nøglen til nummerpladesøgning.",
+        "data": {
+          "motorapi_api_key": "API-nøgle til nummerpladesøgning"
+        }
       }
     },
     "error": {
-      "invalid_auth": "Invalid API key",
-      "cannot_connect": "Cannot connect to the service",
-      "timeout": "The request timed out",
-      "vehicle_not_found": "Vehicle not found",
-      "missing_api_key": "API key is required"
+      "invalid_auth": "Ugyldig API-nøgle.",
+      "cannot_connect": "Kunne ikke oprette forbindelse.",
+      "timeout": "Forespørgslen fik timeout.",
+      "missing_api_key": "Der kræves en API-nøgle.",
+      "charger_entity_required": "Denne ladeprofil kræver en lader-entity.",
+      "smart_charging_mapping_required": "Home Assistant EV Smart Charging kræver enten en lader-entity eller både start- og stop-service override.",
+      "invalid_charger_start_data": "Data til start-service skal være gyldig JSON-objekttekst.",
+      "invalid_charger_stop_data": "Data til stop-service skal være gyldig JSON-objekttekst.",
+      "unsupported_country": "Det valgte land understøttes ikke endnu. Pull requests til flere lande er velkomne."
     },
     "abort": {
-      "reauth_successful": "Reauthentication was successful"
+      "reauth_successful": "Genforbindelse lykkedes."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "EV Guest indstillinger",
-        "description": "Lad MotorAPI API-n\u00f8glen st\u00e5 tom for at beholde den nuv\u00e6rende.",
+        "description": "Opdater EV Guest-indstillinger.",
         "data": {
-          "name": "Name",
-          "price_entity": "Elpris-sensor",
+          "language": "Sprog",
+          "country": "Land",
+          "price_entity": "Elprissensor",
           "currency": "Valuta for ladeomkostning",
           "time_format": "Tidsformat",
           "duration_format": "Format for ladetid",
-          "motorapi_api_key": "MotorAPI API-n\u00f8gle",
-          "charger_switch_entity": "Lader-switch entity"
+          "motorapi_api_key": "API-nøgle til nummerpladesøgning",
+          "charger_backend": "Ladeprofil",
+          "charger_switch_entity": "Lader-entity",
+          "charger_status_entity": "Status-entity for lader",
+          "charger_start_service": "Override for start-service",
+          "charger_stop_service": "Override for stop-service",
+          "charger_start_data": "Data til start-service (JSON)",
+          "charger_stop_data": "Data til stop-service (JSON)"
         }
       }
     }
   },
-  "entity": {
-    "button": {
-      "grab_car_data": {
-        "name": "Hent bildata"
-      },
-      "calculate": {
-        "name": "Beregn"
+  "selector": {
+    "charger_backend": {
+      "options": {
+        "generic_switch": "Generisk switch",
+        "ok": "OK-lader",
+        "easee": "Easee",
+        "zaptec_go": "Zaptec GO",
+        "tesla_wall_connector": "Tesla Wall Connector",
+        "ha_ev_smart_charging": "HA EV Smart Charging",
+        "dummy_test": "Dummy Test Charger"
       }
     },
-    "number": {
-      "soc": {
-        "name": "SoC (State of Charge)"
-      },
-      "battery_capacity": {
-        "name": "Battery Capacity"
-      },
-      "charger_power": {
-        "name": "Ladeeffekt"
-      },
-      "charge_limit": {
-        "name": "Ladegr\u00e6nse"
+    "language": {
+      "options": {
+        "en": "English",
+        "da": "Dansk"
       }
     },
-    "sensor": {
-      "charging_speed": {
-        "name": "Ladehastighed"
-      },
-      "charge_start_time": {
-        "name": "Ladestart"
-      },
-      "charge_end_time": {
-        "name": "Ladeslut"
-      },
-      "charge_time": {
-        "name": "Ladetid"
-      },
-      "charge_costs": {
-        "name": "Ladeomkostning"
-      },
-      "car_brand": {
-        "name": "Bil m\u00e6rke"
-      },
-      "car_model": {
-        "name": "Bil model"
-      },
-      "car_variant": {
-        "name": "Bil variant"
-      },
-      "car_battery_capacity": {
-        "name": "Bil batterikapacitet"
-      },
-      "status": {
-        "name": "Status"
+    "country": {
+      "options": {
+        "dk": "Danmark"
       }
     },
-    "text": {
-      "license_plate": {
-        "name": "Nummerplade"
-      },
-      "charge_completion_time": {
-        "name": "F\u00e6rdig ladet kl."
+    "currency": {
+      "options": {
+        "DKK": "DKK",
+        "EUR": "EUR",
+        "USD": "USD"
       }
     },
-    "switch": {
-      "use_completion_time": {
-        "name": "Brug f\u00e6rdig ladet kl."
-      },
-      "enable_charger_control": {
-        "name": "Aktiv\u00e9r laderstyring"
-      },
-      "continuous_charging_preferred": {
-        "name": "Foretr\u00e6k kontinuerlig opladning"
+    "time_format": {
+      "options": {
+        "24h": "24-timer",
+        "12h": "12-timer"
+      }
+    },
+    "duration_format": {
+      "options": {
+        "minutes": "Minutter",
+        "hours_minutes": "Timer og minutter"
       }
     }
   }
