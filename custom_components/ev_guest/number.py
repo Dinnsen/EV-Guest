@@ -79,4 +79,4 @@ class EVGuestNumber(EVGuestCoordinatorEntity, NumberEntity):
         return self.coordinator.data.inputs.get(self._key)
 
     async def async_set_native_value(self, value: float) -> None:
-        await self.coordinator.async_set_input_value(self._key, value)
+        await self.coordinator.async_set_input_value(self._key, float(value))

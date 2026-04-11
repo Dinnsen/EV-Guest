@@ -1,12 +1,6 @@
 {
   "name": "EV Guest",
-  "domains": [
-    "ev_guest"
-  ],
-  "homeassistant": "2025.1.0",
-  "render_readme": true,
-  "country": [
-    "DK"
-  ],
-  "iot_class": "Cloud Polling"
+  "content_in_root": false,
+  "country": "DK",
+  "homeassistant": "2026.3.0"
 }

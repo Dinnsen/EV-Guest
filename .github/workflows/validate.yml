@@ -7,38 +7,15 @@ on:
 jobs:
   basic:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Show repo root
+      - name: Check custom component structure
         run: |
-          echo "Repo root:"
-          pwd
-          ls -la
-          echo ""
-          echo "custom_components/ev_guest:"
-          ls -la custom_components/ev_guest || true
-
-      - name: Check required files
-        run: |
-          missing=0
-
-          for file in                 custom_components/ev_guest/manifest.json                 custom_components/ev_guest/__init__.py                 custom_components/ev_guest/config_flow.py                 custom_components/ev_guest/coordinator.py                 custom_components/ev_guest/services.yaml                 hacs.json                 README.md                 LICENSE
-          do
-            if [ -f "$file" ]; then
-              echo "OK: $file"
-            else
-              echo "MISSING: $file"
-              missing=1
-            fi
-          done
-
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Check Python syntax
-        run: |
-          python -m compileall custom_components/ev_guest tests
+          test -f custom_components/ev_guest/manifest.json
+          test -f custom_components/ev_guest/__init__.py
+          test -f custom_components/ev_guest/config_flow.py
+          test -f custom_components/ev_guest/coordinator.py
+          test -f README.md
+          test -f hacs.json

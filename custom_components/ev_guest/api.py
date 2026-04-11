@@ -11,13 +11,10 @@ from typing import Any
 from aiohttp import ClientError, ClientSession
 
 from .const import (
-    COUNTRY_DK,
-    COUNTRY_PROVIDER_DEFAULTS,
     MOTORAPI_BASE_URL,
     NHTSA_DECODE_URL,
     OPEN_EV_DATA_FALLBACK_URL,
     OPEN_EV_DATA_URL,
-    PLATE_PROVIDER_MOTORAPI_DK,
     USER_AGENT,
 )
 
@@ -61,9 +58,11 @@ class BatteryLookupResult:
     raw: dict[str, Any] | None
 
 
+
 def clean_identifier(value: str) -> str:
     """Normalize plate/VIN strings."""
     return re.sub(r"[^A-Za-z0-9]", "", value or "").upper()
+
 
 
 def normalize_text(value: str | None) -> str:
@@ -71,6 +70,7 @@ def normalize_text(value: str | None) -> str:
     if not value:
         return ""
     return re.sub(r"[^a-z0-9+]", "", value.lower())
+
 
 
 def _extract_float(value: Any) -> float | None:
@@ -85,38 +85,14 @@ def _extract_float(value: Any) -> float | None:
     return None
 
 
-def get_default_plate_provider(country: str) -> str:
-    """Return the default plate provider for a country."""
-    return COUNTRY_PROVIDER_DEFAULTS.get(country, PLATE_PROVIDER_MOTORAPI_DK)
-
-
-async def async_validate_country_provider_credentials(
-    session: ClientSession, country: str, api_key: str
-) -> None:
-    """Validate provider credentials for the selected country."""
-    provider = get_default_plate_provider(country)
-    if provider == PLATE_PROVIDER_MOTORAPI_DK:
-        await async_validate_motorapi_key(session, api_key)
-        return
-    raise EVGuestLookupError("unsupported_country")
-
-
-async def async_lookup_vehicle_by_country(
-    session: ClientSession, plate: str, country: str, api_key: str
-) -> VehicleLookupResult:
-    """Look up vehicle data for the selected country."""
-    provider = get_default_plate_provider(country)
-    if provider == PLATE_PROVIDER_MOTORAPI_DK and country == COUNTRY_DK:
-        return await async_lookup_vehicle_motorapi(session, plate, api_key)
-    raise EVGuestLookupError("unsupported_country")
-
-
 async def async_validate_motorapi_key(session: ClientSession, api_key: str) -> None:
     """Validate the MotorAPI key with a harmless request."""
     if not api_key:
         raise EVGuestAuthError("missing_api_key")
+
     url = f"{MOTORAPI_BASE_URL}/vehicles/AA00000"
     headers = {"User-Agent": USER_AGENT, "X-AUTH-TOKEN": api_key}
+
     try:
         async with session.get(url, headers=headers, timeout=20) as resp:
             if resp.status == 401:
@@ -130,9 +106,7 @@ async def async_validate_motorapi_key(session: ClientSession, api_key: str) -> N
         raise EVGuestLookupError("timeout") from err
 
 
-async def async_lookup_vehicle_motorapi(
-    session: ClientSession, plate: str, api_key: str
-) -> VehicleLookupResult:
+async def async_lookup_vehicle_motorapi(session: ClientSession, plate: str, api_key: str) -> VehicleLookupResult:
     """Look up vehicle data using MotorAPI."""
     plate = clean_identifier(plate)
     if not plate:
@@ -169,9 +143,7 @@ async def async_lookup_vehicle_motorapi(
     )
 
 
-async def async_decode_vin_nhtsa(
-    session: ClientSession, vin: str, model_year: int | None = None
-) -> VehicleLookupResult | None:
+async def async_decode_vin_nhtsa(session: ClientSession, vin: str, model_year: int | None = None) -> VehicleLookupResult | None:
     """Decode a VIN using NHTSA vPIC."""
     vin = clean_identifier(vin)
     if not vin:
@@ -180,7 +152,6 @@ async def async_decode_vin_nhtsa(
     url = NHTSA_DECODE_URL.format(vin=vin)
     if model_year:
         url += f"&modelyear={model_year}"
-
     try:
         async with session.get(url, headers={"User-Agent": USER_AGENT}, timeout=20) as resp:
             if resp.status != 200:
@@ -192,7 +163,6 @@ async def async_decode_vin_nhtsa(
     results = payload.get("Results") if isinstance(payload, dict) else None
     if not isinstance(results, list) or not results:
         return None
-
     row = results[0]
     if not isinstance(row, dict):
         return None
@@ -224,16 +194,14 @@ async def async_lookup_battery_open_ev_data(
         return BatteryLookupResult(None, "Open EV Data", None, None)
 
     scored = sorted(
-        (
-            (_score_candidate(item, brand, model, variant, model_year), item)
-            for item in candidates
-        ),
+        ((_score_candidate(item, brand, model, variant, model_year), item) for item in candidates),
         key=lambda item: item[0],
         reverse=True,
     )
     best_score, best = scored[0]
     if best_score < 45:
         return BatteryLookupResult(None, "Open EV Data", best_score, best)
+
     return BatteryLookupResult(best.get("battery_capacity"), "Open EV Data", best_score, best)
 
 
@@ -248,6 +216,7 @@ async def _async_fetch_open_ev_dataset(session: ClientSession) -> Any:
     return []
 
 
+
 def _extract_year(value: Any) -> int | None:
     try:
         if value in (None, ""):
@@ -255,6 +224,7 @@ def _extract_year(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
 
 
 def _extract_candidates(node: Any, inherited_brand: str | None = None) -> list[dict[str, Any]]:
@@ -267,9 +237,7 @@ def _extract_candidates(node: Any, inherited_brand: str | None = None) -> list[d
         return items
 
     brand = node.get("brand") or node.get("make") or inherited_brand
-    model = node.get("model") or (
-        node.get("name") if node.get("battery") or node.get("variant") else None
-    )
+    model = node.get("model") or (node.get("name") if node.get("battery") or node.get("variant") else None)
     variant = node.get("variant") or node.get("trim") or node.get("version")
     year = _extract_year(node.get("model_year") or node.get("release_year") or node.get("year"))
 
@@ -287,7 +255,6 @@ def _extract_candidates(node: Any, inherited_brand: str | None = None) -> list[d
         battery = _extract_float(node.get(key))
         if battery is not None:
             break
-
     if battery is None and isinstance(node.get("battery"), dict):
         battery = (
             _extract_float(node["battery"].get("usable_kwh"))
@@ -313,18 +280,12 @@ def _extract_candidates(node: Any, inherited_brand: str | None = None) -> list[d
     return items
 
 
-def _score_candidate(
-    candidate: dict[str, Any],
-    brand: str | None,
-    model: str | None,
-    variant: str | None,
-    model_year: int | None,
-) -> float:
+
+def _score_candidate(candidate: dict[str, Any], brand: str | None, model: str | None, variant: str | None, model_year: int | None) -> float:
     score = 0.0
     cand_brand = normalize_text(candidate.get("brand"))
     cand_model = normalize_text(candidate.get("model"))
     cand_variant = normalize_text(candidate.get("variant"))
-
     brand_n = normalize_text(brand)
     model_n = normalize_text(model)
     variant_n = normalize_text(variant)

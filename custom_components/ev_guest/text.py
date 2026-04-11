@@ -17,9 +17,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities(
-        [EVGuestLicensePlateText(coordinator), EVGuestCompletionTimeText(coordinator)]
-    )
+    async_add_entities([EVGuestLicensePlateText(coordinator), EVGuestCompletionTimeText(coordinator)])
 
 
 class EVGuestLicensePlateText(EVGuestCoordinatorEntity, TextEntity):

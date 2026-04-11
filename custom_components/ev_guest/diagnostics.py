@@ -11,9 +11,7 @@ from homeassistant.core import HomeAssistant
 from .const import REDACT_KEYS
 
 
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     coordinator = entry.runtime_data
     return {
@@ -22,5 +20,4 @@ async def async_get_config_entry_diagnostics(
         "inputs": async_redact_data(dict(coordinator.data.inputs), REDACT_KEYS),
         "results": async_redact_data(dict(coordinator.data.results), REDACT_KEYS),
         "service_health": dict(coordinator.data.service_health),
-        "plan_segments": coordinator.debug_plan_segments,
     }

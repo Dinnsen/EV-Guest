@@ -1,117 +1,222 @@
 # EV Guest
 
-EV Guest helps Home Assistant calculate the cheapest charging window for guest EVs without pairing the car directly to Home Assistant. The current upstream release is `0.4.0`, with UI setup, MotorAPI-backed Danish plate lookup, price-sensor planning, and basic charger control already present.
+<p align="center">
+  <img src="docs/assets/EV-Guest.jpg" width="420" alt="EV Guest logo">
+</p>
 
-This `0.5.0` release pack builds on that structure and keeps migration in place from older config entries by preserving the existing charger switch setting while adding new defaults for charger profile, language, and country. The existing integration already stores config via config entries and includes migration logic, which is why extending the entry format is the safest way to stay HACS-update friendly.
+[![GitHub Release][releases-shield]][releases]
+[![GitHub All Releases][download-all-shield]][releases]
+[![HACS][hacs-shield]][hacs]
+[![BuyMeCoffee][buymecoffee-shield]][buymecoffee]
 
-## English
+EV Guest for Home Assistant helps you find the cheapest charging window for guest EVs **without connecting the car to Home Assistant**.
 
-### What is new in this pack
+Version **0.5.1** keeps the simple v0.4.0 entity model and configuration flow, while updating branding and packaging.
 
-- Language selection in configuration: `English` and `Dansk`
-- Country selection in configuration: `Denmark` for now
-- Future-ready country/provider structure so contributors can add more countries through pull requests
-- Tighter charger profile mapping for:
-  - Generic switch
-  - OK charger
-  - Easee
-  - Zaptec GO
-  - Tesla Wall Connector
-  - Home Assistant EV Smart Charging
-  - Dummy Test Charger
-- Expanded charger diagnostics and control actions
-- Updated logo assets
+The integration:
+- looks up vehicle identity from the guest's license plate
+- enriches vehicle data from the VIN when available
+- matches the vehicle against Open EV Data to estimate battery capacity
+- combines the result with a user-selected electricity price sensor to calculate the cheapest charging plan before a chosen completion time
 
-### Country and provider model
+This package is built as a **Silver-aligned custom integration**. That means the package includes UI setup, unload support, reauthentication, entity availability handling, explicit parallel update settings, service actions, and diagnostics. The official Home Assistant Integration Quality Scale itself only applies to integrations that are reviewed in core, so this repository is **aligned with Silver requirements**, not officially certified as Silver. Home Assistant’s quality scale defines Silver as Bronze plus config-entry unloading, marking entities unavailable when appropriate, logging unavailable/back-connected events, parallel-update limits, UI reauthentication, and over 95% test coverage. citeturn549688view0
 
-The current upstream package is effectively Denmark-first because vehicle lookup is done with MotorAPI and then enriched with VIN and Open EV Data. This pack formalizes that by introducing an explicit `country` setting with `dk` as the only built-in option for now, and a provider registry layer behind it so more countries can be added later without rewriting the rest of the integration.
+## Table of content
+- [Installation](#installation)
+- [Setup](#setup)
+- [Configuration options](#configuration-options)
+- [Usage](#usage)
+- [Entities](#entities)
+- [Service actions](#service-actions)
+- [Supported electricity price sensors](#supported-electricity-price-sensors)
+- [Data update behavior](#data-update-behavior)
+- [Screenshots](#screenshots)
+- [Legal information](#legal-information)
+- [Known limitations](#known-limitations)
+- [Troubleshooting](#troubleshooting)
+- [Removal](#removal)
 
-### Charger profiles
+# Installation
 
-EV Guest already supports charger planning and generic charger control through the configured charger entity and optional service overrides. This pack keeps that design and makes the profiles clearer and safer in the config flow. The existing coordinator already plans callbacks, reconciles expected state, and calls either service overrides or `<domain>.turn_on` / `<domain>.turn_off` on the selected charger entity.
+### Option 1 - HACS
+- Ensure HACS is installed.
+- Add this repository as a **custom repository** in HACS with category **Integration**.
+- Install **EV Guest**.
+- Restart Home Assistant.
 
-Recommended mapping in this pack:
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.][my-ha-badge]][my-ha-url]
 
-- **Generic switch**: requires a `switch.*` charger entity
-- **OK / Easee / Zaptec GO / Tesla Wall Connector**: requires a `switch.*` charger entity, with status entity optional
-- **HA EV Smart Charging**: requires either a charger entity or both start/stop service overrides
-- **Dummy Test Charger**: no real charger required; use it to validate EV Guest control logic
+### Option 2 - Manual
+- Download the latest release.
+- Copy `custom_components/ev_guest` into your Home Assistant `custom_components` folder.
+- Restart Home Assistant.
 
-### Setup notes
+# Setup
 
-For Denmark, use a supported hourly price sensor such as one exposing `raw_today`, `raw_tomorrow`, `today`, `tomorrow`, or `forecast`, which is how the upstream integration already expects price data.
+Add **EV Guest** from **Settings → Devices & Services**.
 
-### Pull requests for new countries
+During setup, EV Guest asks for:
+- **Optional Charger Switch** (`switch.*`) for direct start/stop charger control using the same simple Model A approach as v0.4.0
+- **Name**
+- **Electricity Price Sensor**
+- **Charge Costs Currency** (`DKK`, `EUR`, `USD`)
+- **Clock format** (`24h` or `12h`)
+- **Charge Time format** (`minutes` or `hours_minutes`)
+- **MotorAPI API key**
 
-To add a new country later, contributors only need to:
+The integration tests the MotorAPI key during setup and reauthentication. Config-flow setup through the UI and connection testing are both part of the quality-scale rules for Bronze, while Silver adds a UI reauthentication flow. citeturn549688view0
 
-1. add a new country constant and selector option
-2. add a provider mapping in the provider registry
-3. implement provider validation and plate lookup in `api.py`
-4. add translations and README notes
+No user setup is needed for:
+- **NHTSA vPIC**
+- **Open EV Data**
 
-## Dansk
+# Configuration options
 
-### Hvad er nyt i denne pakke
+After setup, the options flow lets you change:
+- Electricity Price Sensor
+- Charge Costs Currency
+- Clock format
+- Charge Time format
+- MotorAPI API key
 
-- Sprogvalg i opsætning: `English` og `Dansk`
-- Land i opsætning: `Danmark` indtil videre
-- Fremtidssikret struktur til nummerplade-API pr. land, så andre kan lave pull requests med flere lande
-- Strammere ladeprofiler til:
-  - Generic switch
-  - OK-lader
-  - Easee
-  - Zaptec GO
-  - Tesla Wall Connector
-  - Home Assistant EV Smart Charging
-  - Dummy Test Charger
-- Udvidet ladediagnostik og styringsknapper
-- Opdaterede logo-filer
+# Usage
 
-### Land og provider
+1. Enter the plate in the license-plate text entity.
+2. Press **Grab Car Data**.
+3. Review the returned brand, model, variant, and battery estimate.
+4. Set SoC, charger power, charge limit, and completion time.
+5. Press **Calculate**.
 
-Den nuværende upstream-integration er i praksis bygget til Danmark, fordi opslag starter i MotorAPI og derefter beriger data med VIN-opslag og Open EV Data. Denne pakke gør det eksplicit med et `country`-valg og et lille provider-lag, så flere lande kan tilføjes senere uden at omskrive hele integrationen.
+If the online battery match is weak, set battery capacity manually and calculate again.
 
-### Ladeprofiler
+# Entities
 
-Den eksisterende coordinator i repoet laver allerede ladeplan, planlagte callbacks og generisk start/stop via valgt entity eller service override. Denne pakke bygger videre på den model, men gør valg og validering tydeligere i config flow.
+## Input/helper entities
+- License Plate
+- SoC
+- Battery Capacity
+- Charger Power
+- Charge Limit
+- Charge Completion Time
+- Grab Car Data
+- Calculate
 
-Anbefalet mapping i denne pakke:
+## Result sensors
+- Charging Speed
+- Charge Start Time
+- Charge End Time
+- Charge Time
+- Charge Costs
+- Car Brand
+- Car Model
+- Car Variant
+- Car Battery Capacity
+- Status
 
-- **Generic switch**: kræver en `switch.*`-entity
-- **OK / Easee / Zaptec GO / Tesla Wall Connector**: kræver en `switch.*`-entity, status-entity er valgfri
-- **HA EV Smart Charging**: kræver enten en lader-entity eller både start- og stop-service override
-- **Dummy Test Charger**: kræver ingen rigtig lader og bruges til test af EV Guest-styringen
+## Availability
+Vehicle-data result sensors are marked unavailable if the upstream lookup is unavailable, matching the Silver rule for marking entities unavailable when appropriate. citeturn549688view0
 
-### Vigtige filer i pakken
+# Service actions
 
-- `custom_components/ev_guest/__init__.py`
-- `custom_components/ev_guest/api.py`
-- `custom_components/ev_guest/config_flow.py`
-- `custom_components/ev_guest/coordinator.py`
-- `custom_components/ev_guest/const.py`
-- `custom_components/ev_guest/strings.json`
-- `custom_components/ev_guest/translations/da.json`
-- `custom_components/ev_guest/translations/en.json`
-- `custom_components/ev_guest/brand/logo.svg`
-- `custom_components/ev_guest/brand/icon.svg`
+EV Guest registers two service actions during integration setup:
+- `ev_guest.grab_car_data`
+- `ev_guest.calculate`
 
-## Important note
+Both require `entry_id`.
 
-This pack is designed to be migration-friendly from the current `v0.4.0` config-entry structure. It is syntax-checked locally, but the vendor profiles still rely on the Home Assistant entities and services exposed by each installed charger integration, so final runtime verification should be done in Home Assistant after upload. The current upstream package already documents HACS/manual install, config-entry setup, entities, and supported price-sensor layouts, which this pack intentionally extends rather than replacing.
+Example:
+```yaml
+service: ev_guest.calculate
+data:
+  entry_id: 1234567890abcdef
+```
+
+# Supported electricity price sensors
+
+EV Guest works with sensors exposing hourly prices in one of these layouts:
+- `raw_today` / `raw_tomorrow` with `hour` + `price`
+- `today` / `tomorrow` hourly arrays
+- `forecast` with `hour` + `price`
+
+The example sensor `sensor.energi_data_service` fits this pattern.
+
+# Data update behavior
+
+EV Guest listens for state changes on the selected electricity-price sensor and recalculates when needed. It also keeps a coordinator with a 30-minute refresh interval for internal state handling. Home Assistant’s diagnostics documentation also describes that integrations can expose redacted config-entry diagnostics for troubleshooting, which this package includes. citeturn549688view1
+
+# Screenshots
+
+Place screenshots here:
+- `docs/screenshots/overview.png`
+- `docs/screenshots/setup_step_1.png`
+- `docs/screenshots/setup_step_2.png`
+- `docs/screenshots/entities.png`
+
+# Legal information
+
+EV Guest is **not affiliated with, endorsed by, or maintained by** Home Assistant, MotorAPI, NHTSA, or Open EV Data.
+
+Third-party sources used:
+- MotorAPI for Danish license plate and VIN lookup
+- NHTSA vPIC for VIN decoding fallback
+- Open EV Data for battery matching
+
+Open EV Data attribution is included in this repository as required by that dataset’s license terms. The diagnostics docs also stress that passwords, API keys, tokens, location data, and personal information must not be exposed, which is why EV Guest redacts API key, VIN, and plate data in diagnostics. citeturn549688view1
+
+License plates, VINs, and derived vehicle metadata may be sent to external services while lookups are performed. Users are responsible for their own API keys and third-party service usage.
+
+# Known limitations
+
+- Battery matching is best effort.
+- Some variants differ across years and markets.
+- Currency selection changes the unit label only; it does not perform FX conversion.
+- Charging is calculated as a linear AC session from user-supplied charger power.
+- The package includes a tests folder and Silver-oriented structure, but I have not executed a Home Assistant test suite here, so I cannot honestly claim verified 95% test coverage yet.
+
+# Troubleshooting
+
+### Car data not found
+- Check the plate format.
+- Check the MotorAPI key.
+- Some cars may not have a confident battery match.
+
+### Sensors unavailable
+- The external lookup service may be down.
+- Reauthenticate the integration if the MotorAPI key has changed.
+
+### Charge cost looks wrong
+- Confirm the selected electricity price sensor.
+- Confirm future hourly prices are present.
+- Confirm battery capacity and charger power.
+
+# Removal
+
+To remove EV Guest:
+- Go to **Settings → Devices & Services**
+- Open **EV Guest**
+- Choose **Delete**
+- Restart Home Assistant if you installed it manually and want to remove the files from `custom_components`
+
+[releases-shield]: https://img.shields.io/github/release/Dinnsen/EV-Guest.svg?style=for-the-badge
+[releases]: https://github.com/Dinnsen/EV-Guest/releases
+[download-all-shield]: https://img.shields.io/github/downloads/Dinnsen/EV-Guest/total?style=for-the-badge
+[hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
+[hacs]: https://www.hacs.xyz/
+[buymecoffee-shield]: https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000
+[buymecoffee]: https://buymeacoffee.com/dinnsen
+[my-ha-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
+[my-ha-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=Dinnsen&repository=EV-Guest&category=integration
+
+## Changelog
+
+### v0.3.1
+- Added missing input entities for SoC, Charger Power, Charge Limit, completion time and completion toggle.
+- Reworked completion time input to follow the selected 12h/24h format.
+- Fixed options/configure flow.
+- Fixed local brand images by shipping PNG assets.
+- Added tests to the package.
 
 
-## Repository structure in this complete pack
+## Updating from an older package
 
-This download includes the full repository layout:
-
-- `.github/workflows`
-- `custom_components/ev_guest`
-- `docs/dashboard`
-- `docs/screenshots`
-- `tests`
-- root project files such as `.gitignore`, `LICENSE`, `README.md`, and `hacs.json`
-
-## Migration note
-
-The package keeps config-entry migration in `custom_components/ev_guest/__init__.py` and extends the existing configuration keys rather than replacing them. That is the part intended to let existing `v0.4.0` users update in HACS and keep their current entries.
+When updating from an older EV Guest package, replace the entire `custom_components/ev_guest/` folder and the entire `tests/` folder. Do not mix old and new files. Restart Home Assistant after the HACS update.

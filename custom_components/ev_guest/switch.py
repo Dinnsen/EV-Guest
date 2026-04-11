@@ -26,7 +26,6 @@ async def async_setup_entry(
             EVGuestUseCompletionTimeSwitch(coordinator),
             EVGuestEnableChargerControlSwitch(coordinator),
             EVGuestContinuousChargingPreferredSwitch(coordinator),
-            EVGuestDummyTestChargerSwitch(coordinator),
         ]
     )
 
@@ -76,27 +75,3 @@ class EVGuestContinuousChargingPreferredSwitch(_BaseInputSwitch):
 
     def __init__(self, coordinator) -> None:
         super().__init__(coordinator, INPUT_CONTINUOUS_CHARGING_PREFERRED)
-
-
-class EVGuestDummyTestChargerSwitch(EVGuestCoordinatorEntity, SwitchEntity):
-    """Internal dummy charger for integration testing."""
-
-    _attr_name = "Dummy Test Charger"
-    _attr_icon = "mdi:ev-station"
-
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator, "dummy_test_charger")
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.uses_dummy_backend
-
-    @property
-    def is_on(self) -> bool:
-        return self.coordinator.dummy_charger_on
-
-    async def async_turn_on(self, **kwargs) -> None:
-        await self.coordinator.async_set_dummy_charger_state(True, reason="manual_dummy_switch")
-
-    async def async_turn_off(self, **kwargs) -> None:
-        await self.coordinator.async_set_dummy_charger_state(False, reason="manual_dummy_switch")

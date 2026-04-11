@@ -3,112 +3,121 @@
     "step": {
       "user": {
         "title": "EV Guest",
-        "description": "Set up EV Guest for guest EV planning and optional charger control.",
+        "description": "Set up EV Guest.",
         "data": {
           "name": "Name",
-          "language": "Language",
-          "country": "Country",
           "price_entity": "Electricity price sensor",
-          "currency": "Charge cost currency",
+          "currency": "Charge costs currency",
           "time_format": "Clock format",
           "duration_format": "Charge time format",
-          "motorapi_api_key": "License plate API key",
-          "charger_backend": "Charger profile",
-          "charger_switch_entity": "Charger entity",
-          "charger_status_entity": "Charger status entity",
-          "charger_start_service": "Start service override",
-          "charger_stop_service": "Stop service override",
-          "charger_start_data": "Start service data (JSON)",
-          "charger_stop_data": "Stop service data (JSON)"
+          "motorapi_api_key": "MotorAPI API key",
+          "charger_switch_entity": "Charger switch entity"
         }
       },
       "reauth_confirm": {
-        "title": "Reconnect EV Guest",
-        "description": "Update the license plate API key.",
-        "data": {
-          "motorapi_api_key": "License plate API key"
-        }
+        "title": "Reconnect MotorAPI",
+        "description": "Update the MotorAPI API key."
       }
     },
     "error": {
-      "invalid_auth": "Invalid API key.",
-      "cannot_connect": "Could not connect.",
-      "timeout": "The request timed out.",
-      "missing_api_key": "An API key is required.",
-      "charger_entity_required": "This charger profile requires a charger entity.",
-      "smart_charging_mapping_required": "Home Assistant EV Smart Charging needs either a charger entity or both start and stop service overrides.",
-      "invalid_charger_start_data": "Start service data must be valid JSON object text.",
-      "invalid_charger_stop_data": "Stop service data must be valid JSON object text.",
-      "unsupported_country": "The selected country is not supported yet. Pull requests for additional countries are welcome."
+      "invalid_auth": "Invalid API key",
+      "cannot_connect": "Cannot connect to the service",
+      "timeout": "The request timed out",
+      "vehicle_not_found": "Vehicle not found",
+      "missing_api_key": "API key is required"
     },
     "abort": {
-      "reauth_successful": "Reauthentication successful."
+      "reauth_successful": "Reauthentication was successful"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "EV Guest options",
-        "description": "Update EV Guest settings.",
+        "description": "Leave the MotorAPI API key empty to keep the current one.",
         "data": {
-          "language": "Language",
-          "country": "Country",
           "price_entity": "Electricity price sensor",
-          "currency": "Charge cost currency",
+          "currency": "Charge costs currency",
           "time_format": "Clock format",
           "duration_format": "Charge time format",
-          "motorapi_api_key": "License plate API key",
-          "charger_backend": "Charger profile",
-          "charger_switch_entity": "Charger entity",
-          "charger_status_entity": "Charger status entity",
-          "charger_start_service": "Start service override",
-          "charger_stop_service": "Stop service override",
-          "charger_start_data": "Start service data (JSON)",
-          "charger_stop_data": "Stop service data (JSON)"
+          "motorapi_api_key": "MotorAPI API key",
+          "charger_switch_entity": "Charger switch entity"
         }
       }
     }
   },
-  "selector": {
-    "charger_backend": {
-      "options": {
-        "generic_switch": "Generic switch",
-        "ok": "OK charger",
-        "easee": "Easee",
-        "zaptec_go": "Zaptec GO",
-        "tesla_wall_connector": "Tesla Wall Connector",
-        "ha_ev_smart_charging": "HA EV Smart Charging",
-        "dummy_test": "Dummy Test Charger"
+  "entity": {
+    "button": {
+      "grab_car_data": {
+        "name": "Grab Car Data"
+      },
+      "calculate": {
+        "name": "Calculate"
       }
     },
-    "language": {
-      "options": {
-        "en": "English",
-        "da": "Dansk"
+    "number": {
+      "soc": {
+        "name": "SoC (State of Charge)"
+      },
+      "battery_capacity": {
+        "name": "Battery Capacity"
+      },
+      "charger_power": {
+        "name": "Charger Power"
+      },
+      "charge_limit": {
+        "name": "Charge Limit"
       }
     },
-    "country": {
-      "options": {
-        "dk": "Denmark"
+    "sensor": {
+      "charging_speed": {
+        "name": "Charging Speed"
+      },
+      "charge_start_time": {
+        "name": "Charge Start Time"
+      },
+      "charge_end_time": {
+        "name": "Charge End Time"
+      },
+      "charge_time": {
+        "name": "Charge Time"
+      },
+      "charge_costs": {
+        "name": "Charge Costs"
+      },
+      "car_brand": {
+        "name": "Car Brand"
+      },
+      "car_model": {
+        "name": "Car Model"
+      },
+      "car_variant": {
+        "name": "Car Variant"
+      },
+      "car_battery_capacity": {
+        "name": "Car Battery Capacity"
+      },
+      "status": {
+        "name": "Status"
       }
     },
-    "currency": {
-      "options": {
-        "DKK": "DKK",
-        "EUR": "EUR",
-        "USD": "USD"
+    "text": {
+      "license_plate": {
+        "name": "License Plate"
+      },
+      "charge_completion_time": {
+        "name": "Charge Completion Time"
       }
     },
-    "time_format": {
-      "options": {
-        "24h": "24-hour",
-        "12h": "12-hour"
-      }
-    },
-    "duration_format": {
-      "options": {
-        "minutes": "Minutes",
-        "hours_minutes": "Hours and minutes"
+    "switch": {
+      "use_completion_time": {
+        "name": "Use Charge Completion Time"
+      },
+      "enable_charger_control": {
+        "name": "Enable Charger Control"
+      },
+      "continuous_charging_preferred": {
+        "name": "Continuous Charging Preferred"
       }
     }
   }

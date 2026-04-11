@@ -11,33 +11,16 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
-    CONF_CHARGER_BACKEND,
-    CONF_CHARGER_START_DATA,
-    CONF_CHARGER_START_SERVICE,
-    CONF_CHARGER_STATUS_ENTITY,
-    CONF_CHARGER_STOP_DATA,
-    CONF_CHARGER_STOP_SERVICE,
     CONF_CHARGER_SWITCH_ENTITY,
-    CONF_COUNTRY,
-    CONF_CURRENCY,
-    CONF_DURATION_FORMAT,
-    CONF_LANGUAGE,
-    CONF_MOTORAPI_KEY,
-    CONF_PRICE_ENTITY,
-    CONF_TIME_FORMAT,
-    COUNTRY_DK,
     DOMAIN,
-    LANGUAGE_EN,
     PLATFORMS,
     SERVICE_CALCULATE,
-    SERVICE_FORCE_START_CHARGER,
-    SERVICE_FORCE_STOP_CHARGER,
     SERVICE_GRAB_CAR_DATA,
-    SERVICE_RESYNC_CHARGER_PLAN,
 )
 from .coordinator import EVGuestCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
 SERVICE_SCHEMA = vol.Schema({vol.Required("entry_id"): cv.string})
 
 
@@ -52,47 +35,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         coordinator = _get_coordinator(hass, call.data["entry_id"])
         await coordinator.async_calculate()
 
-    async def _handle_force_start(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass, call.data["entry_id"])
-        await coordinator.async_force_start_charger()
-
-    async def _handle_force_stop(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass, call.data["entry_id"])
-        await coordinator.async_force_stop_charger()
-
-    async def _handle_resync(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass, call.data["entry_id"])
-        await coordinator.async_resync_charger_plan()
-
     if not hass.services.has_service(DOMAIN, SERVICE_GRAB_CAR_DATA):
-        hass.services.async_register(
-            DOMAIN, SERVICE_GRAB_CAR_DATA, _handle_grab, schema=SERVICE_SCHEMA
-        )
+        hass.services.async_register(DOMAIN, SERVICE_GRAB_CAR_DATA, _handle_grab, schema=SERVICE_SCHEMA)
     if not hass.services.has_service(DOMAIN, SERVICE_CALCULATE):
-        hass.services.async_register(
-            DOMAIN, SERVICE_CALCULATE, _handle_calculate, schema=SERVICE_SCHEMA
-        )
-    if not hass.services.has_service(DOMAIN, SERVICE_FORCE_START_CHARGER):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_FORCE_START_CHARGER,
-            _handle_force_start,
-            schema=SERVICE_SCHEMA,
-        )
-    if not hass.services.has_service(DOMAIN, SERVICE_FORCE_STOP_CHARGER):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_FORCE_STOP_CHARGER,
-            _handle_force_stop,
-            schema=SERVICE_SCHEMA,
-        )
-    if not hass.services.has_service(DOMAIN, SERVICE_RESYNC_CHARGER_PLAN):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_RESYNC_CHARGER_PLAN,
-            _handle_resync,
-            schema=SERVICE_SCHEMA,
-        )
+        hass.services.async_register(DOMAIN, SERVICE_CALCULATE, _handle_calculate, schema=SERVICE_SCHEMA)
     return True
 
 
@@ -118,28 +64,20 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate older EV Guest config entries to the latest format."""
-    if entry.version >= 7:
+    if entry.version >= 5:
         return True
 
     new_data = dict(entry.data)
     new_data.setdefault("name", entry.title or "EV Guest")
-    new_data.setdefault(CONF_PRICE_ENTITY, "sensor.energi_data_service")
-    new_data.setdefault(CONF_CURRENCY, "DKK")
-    new_data.setdefault(CONF_TIME_FORMAT, "24h")
-    new_data.setdefault(CONF_DURATION_FORMAT, "minutes")
-    new_data.setdefault(CONF_MOTORAPI_KEY, "")
+    new_data.setdefault("price_entity", "sensor.energi_data_service")
+    new_data.setdefault("currency", "DKK")
+    new_data.setdefault("time_format", "24h")
+    new_data.setdefault("duration_format", "minutes")
+    new_data.setdefault("motorapi_api_key", "")
     new_data.setdefault(CONF_CHARGER_SWITCH_ENTITY, "")
-    new_data.setdefault(CONF_CHARGER_BACKEND, "generic_switch")
-    new_data.setdefault(CONF_CHARGER_STATUS_ENTITY, new_data.get(CONF_CHARGER_SWITCH_ENTITY, ""))
-    new_data.setdefault(CONF_CHARGER_START_SERVICE, "")
-    new_data.setdefault(CONF_CHARGER_STOP_SERVICE, "")
-    new_data.setdefault(CONF_CHARGER_START_DATA, "")
-    new_data.setdefault(CONF_CHARGER_STOP_DATA, "")
-    new_data.setdefault(CONF_LANGUAGE, LANGUAGE_EN)
-    new_data.setdefault(CONF_COUNTRY, COUNTRY_DK)
 
-    hass.config_entries.async_update_entry(entry, data=new_data, version=7, minor_version=0)
-    _LOGGER.info("Migrated EV Guest config entry %s to version 7.0", entry.entry_id)
+    hass.config_entries.async_update_entry(entry, data=new_data, version=5, minor_version=0)
+    _LOGGER.info("Migrated EV Guest config entry %s to version 5.0", entry.entry_id)
     return True
 
 
