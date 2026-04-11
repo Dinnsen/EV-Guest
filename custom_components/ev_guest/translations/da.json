@@ -1,0 +1,115 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EV Guest",
+        "description": "Opsæt EV Guest til gæste-elbiler og valgfri ladestyring.",
+        "data": {
+          "name": "Navn",
+          "language": "Sprog",
+          "country": "Land",
+          "price_entity": "Elprissensor",
+          "currency": "Valuta for ladeomkostning",
+          "time_format": "Tidsformat",
+          "duration_format": "Format for ladetid",
+          "motorapi_api_key": "API-nøgle til nummerpladesøgning",
+          "charger_backend": "Ladeprofil",
+          "charger_switch_entity": "Lader-entity",
+          "charger_status_entity": "Status-entity for lader",
+          "charger_start_service": "Override for start-service",
+          "charger_stop_service": "Override for stop-service",
+          "charger_start_data": "Data til start-service (JSON)",
+          "charger_stop_data": "Data til stop-service (JSON)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Genforbind EV Guest",
+        "description": "Opdater API-nøglen til nummerpladesøgning.",
+        "data": {
+          "motorapi_api_key": "API-nøgle til nummerpladesøgning"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ugyldig API-nøgle.",
+      "cannot_connect": "Kunne ikke oprette forbindelse.",
+      "timeout": "Forespørgslen fik timeout.",
+      "missing_api_key": "Der kræves en API-nøgle.",
+      "charger_entity_required": "Denne ladeprofil kræver en lader-entity.",
+      "smart_charging_mapping_required": "Home Assistant EV Smart Charging kræver enten en lader-entity eller både start- og stop-service override.",
+      "invalid_charger_start_data": "Data til start-service skal være gyldig JSON-objekttekst.",
+      "invalid_charger_stop_data": "Data til stop-service skal være gyldig JSON-objekttekst.",
+      "unsupported_country": "Det valgte land understøttes ikke endnu. Pull requests til flere lande er velkomne."
+    },
+    "abort": {
+      "reauth_successful": "Genforbindelse lykkedes."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EV Guest indstillinger",
+        "description": "Opdater EV Guest-indstillinger.",
+        "data": {
+          "language": "Sprog",
+          "country": "Land",
+          "price_entity": "Elprissensor",
+          "currency": "Valuta for ladeomkostning",
+          "time_format": "Tidsformat",
+          "duration_format": "Format for ladetid",
+          "motorapi_api_key": "API-nøgle til nummerpladesøgning",
+          "charger_backend": "Ladeprofil",
+          "charger_switch_entity": "Lader-entity",
+          "charger_status_entity": "Status-entity for lader",
+          "charger_start_service": "Override for start-service",
+          "charger_stop_service": "Override for stop-service",
+          "charger_start_data": "Data til start-service (JSON)",
+          "charger_stop_data": "Data til stop-service (JSON)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "charger_backend": {
+      "options": {
+        "generic_switch": "Generisk switch",
+        "ok": "OK-lader",
+        "easee": "Easee",
+        "zaptec_go": "Zaptec GO",
+        "tesla_wall_connector": "Tesla Wall Connector",
+        "ha_ev_smart_charging": "HA EV Smart Charging",
+        "dummy_test": "Dummy Test Charger"
+      }
+    },
+    "language": {
+      "options": {
+        "en": "English",
+        "da": "Dansk"
+      }
+    },
+    "country": {
+      "options": {
+        "dk": "Danmark"
+      }
+    },
+    "currency": {
+      "options": {
+        "DKK": "DKK",
+        "EUR": "EUR",
+        "USD": "USD"
+      }
+    },
+    "time_format": {
+      "options": {
+        "24h": "24-timer",
+        "12h": "12-timer"
+      }
+    },
+    "duration_format": {
+      "options": {
+        "minutes": "Minutter",
+        "hours_minutes": "Timer og minutter"
+      }
+    }
+  }
+}
