@@ -7,10 +7,21 @@ on:
 jobs:
   basic:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Check custom component structure
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required files
         run: |
+          set -e
           test -f custom_components/ev_guest/manifest.json
+          test -f custom_components/ev_guest/__init__.py
+          test -f custom_components/ev_guest/config_flow.py
           test -f hacs.json
           test -f README.md
+          test -f LICENSE
+
+      - name: Check Python syntax
+        run: |
+          python -m compileall custom_components/ev_guest tests
