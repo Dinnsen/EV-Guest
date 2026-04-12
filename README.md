@@ -1,8 +1,6 @@
 # EV Guest
 
-<p align="center">
-  <img src="docs/assets/EV-Guest.jpg" width="420" alt="EV Guest logo">
-</p>
+![EV Guest](https://raw.githubusercontent.com/Dinnsen/EV-Guest/main/docs/assets/EV-Guest.jpg)
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub All Releases][download-all-shield]][releases]
@@ -11,15 +9,15 @@
 
 EV Guest for Home Assistant helps you find the cheapest charging window for guest EVs **without connecting the car to Home Assistant**.
 
-Version **0.5.1** keeps the simple v0.4.0 entity model and configuration flow, while updating branding and packaging.
+Version **0.6.0** keeps the stable entity model from v0.4.0/v0.5.1 and adds optional charger status awareness, language and country selection in configuration, and a new **Charge Now** diagnostic binary sensor for automations.
 
 The integration:
 - looks up vehicle identity from the guest's license plate
 - enriches vehicle data from the VIN when available
 - matches the vehicle against Open EV Data to estimate battery capacity
-- combines the result with a user-selected electricity price sensor to calculate the cheapest charging plan before a chosen completion time
-
-This package is built as a **Silver-aligned custom integration**. That means the package includes UI setup, unload support, reauthentication, entity availability handling, explicit parallel update settings, service actions, and diagnostics. The official Home Assistant Integration Quality Scale itself only applies to integrations that are reviewed in core, so this repository is **aligned with Silver requirements**, not officially certified as Silver. Home Assistant’s quality scale defines Silver as Bronze plus config-entry unloading, marking entities unavailable when appropriate, logging unavailable/back-connected events, parallel-update limits, UI reauthentication, and over 95% test coverage. citeturn549688view0
+- combines that with a supported electricity price sensor to calculate the cheapest charging plan
+- can optionally control **one charger switch entity** directly (Model A)
+- can optionally observe a separate **charger status entity**
 
 ## Table of content
 - [Installation](#installation)
@@ -29,6 +27,7 @@ This package is built as a **Silver-aligned custom integration**. That means the
 - [Entities](#entities)
 - [Service actions](#service-actions)
 - [Supported electricity price sensors](#supported-electricity-price-sensors)
+- [Vehicle lookup providers](#vehicle-lookup-providers)
 - [Data update behavior](#data-update-behavior)
 - [Screenshots](#screenshots)
 - [Legal information](#legal-information)
@@ -56,15 +55,16 @@ This package is built as a **Silver-aligned custom integration**. That means the
 Add **EV Guest** from **Settings → Devices & Services**.
 
 During setup, EV Guest asks for:
-- **Optional Charger Switch** (`switch.*`) for direct start/stop charger control using the same simple Model A approach as v0.4.0
 - **Name**
 - **Electricity Price Sensor**
 - **Charge Costs Currency** (`DKK`, `EUR`, `USD`)
 - **Clock format** (`24h` or `12h`)
 - **Charge Time format** (`minutes` or `hours_minutes`)
+- **Language** (`English`, `Dansk`)
+- **Country** (`Denmark`)
 - **MotorAPI API key**
-
-The integration tests the MotorAPI key during setup and reauthentication. Config-flow setup through the UI and connection testing are both part of the quality-scale rules for Bronze, while Silver adds a UI reauthentication flow. citeturn549688view0
+- **Optional Charger Switch Entity** (`switch.*`) for direct on/off charging control
+- **Optional Charger Status Entity** (`binary_sensor.*`, `switch.*`, or `input_boolean.*`) so EV Guest can see whether the charger currently reports on/off
 
 No user setup is needed for:
 - **NHTSA vPIC**
@@ -77,7 +77,17 @@ After setup, the options flow lets you change:
 - Charge Costs Currency
 - Clock format
 - Charge Time format
+- Language
+- Country
 - MotorAPI API key
+- Charger Switch Entity (optional)
+- Charger Status Entity (optional)
+
+### Charger Switch Entity
+Optional. Used only when **Enable Charger Control** is turned on inside EV Guest. If left blank, EV Guest still calculates plans but will not try to start or stop a charger.
+
+### Charger Status Entity
+Optional. Lets EV Guest read whether the charger currently appears to be on or off. This is useful when the switch used to control charging is different from the entity that reports charging state.
 
 # Usage
 
@@ -86,6 +96,7 @@ After setup, the options flow lets you change:
 3. Review the returned brand, model, variant, and battery estimate.
 4. Set SoC, charger power, charge limit, and completion time.
 5. Press **Calculate**.
+6. Turn on **Enable Charger Control** only if you want EV Guest to control the configured charger switch.
 
 If the online battery match is weak, set battery capacity manually and calculate again.
 
@@ -98,6 +109,9 @@ If the online battery match is weak, set battery capacity manually and calculate
 - Charger Power
 - Charge Limit
 - Charge Completion Time
+- Use Charge Completion Time
+- Enable Charger Control
+- Continuous Charging Preferred
 - Grab Car Data
 - Calculate
 
@@ -113,8 +127,14 @@ If the online battery match is weak, set battery capacity manually and calculate
 - Car Battery Capacity
 - Status
 
-## Availability
-Vehicle-data result sensors are marked unavailable if the upstream lookup is unavailable, matching the Silver rule for marking entities unavailable when appropriate. citeturn549688view0
+## Diagnostic entities
+- Charge Now
+
+### Charge Now
+`binary_sensor.charge_now` is **on** whenever the current time is inside the planned charging window and **off** otherwise. It is intended for automations, dashboards and external charger logic.
+
+## Dummy charger testing
+A dedicated built-in dummy charger entity is **not** part of the integration package in v0.6.0. For testing, use a Home Assistant helper-based test setup such as an `input_boolean` combined with a template switch, and point **Charger Switch Entity** and optionally **Charger Status Entity** at those helpers.
 
 # Service actions
 
@@ -140,9 +160,19 @@ EV Guest works with sensors exposing hourly prices in one of these layouts:
 
 The example sensor `sensor.energi_data_service` fits this pattern.
 
+# Vehicle lookup providers
+
+v0.6.0 adds an extensible country/provider structure.
+
+Currently supported:
+- **Country:** Denmark
+- **Default provider:** MotorAPI Denmark
+
+The code is structured so additional countries and providers can be added later through pull requests without changing the stable entity model.
+
 # Data update behavior
 
-EV Guest listens for state changes on the selected electricity-price sensor and recalculates when needed. It also keeps a coordinator with a 30-minute refresh interval for internal state handling. Home Assistant’s diagnostics documentation also describes that integrations can expose redacted config-entry diagnostics for troubleshooting, which this package includes. citeturn549688view1
+EV Guest listens for state changes on the selected electricity-price sensor and recalculates when needed. If a charger status entity is configured, EV Guest also listens for its state changes so the current charger status can be reflected in diagnostics and automations.
 
 # Screenshots
 
@@ -161,8 +191,6 @@ Third-party sources used:
 - NHTSA vPIC for VIN decoding fallback
 - Open EV Data for battery matching
 
-Open EV Data attribution is included in this repository as required by that dataset’s license terms. The diagnostics docs also stress that passwords, API keys, tokens, location data, and personal information must not be exposed, which is why EV Guest redacts API key, VIN, and plate data in diagnostics. citeturn549688view1
-
 License plates, VINs, and derived vehicle metadata may be sent to external services while lookups are performed. Users are responsible for their own API keys and third-party service usage.
 
 # Known limitations
@@ -171,7 +199,7 @@ License plates, VINs, and derived vehicle metadata may be sent to external servi
 - Some variants differ across years and markets.
 - Currency selection changes the unit label only; it does not perform FX conversion.
 - Charging is calculated as a linear AC session from user-supplied charger power.
-- The package includes a tests folder and Silver-oriented structure, but I have not executed a Home Assistant test suite here, so I cannot honestly claim verified 95% test coverage yet.
+- Only Denmark is included as a country option in v0.6.0.
 
 # Troubleshooting
 
@@ -188,6 +216,11 @@ License plates, VINs, and derived vehicle metadata may be sent to external servi
 - Confirm the selected electricity price sensor.
 - Confirm future hourly prices are present.
 - Confirm battery capacity and charger power.
+
+### Charger does not start or stop
+- Confirm **Enable Charger Control** is on.
+- Confirm **Charger Switch Entity** is set to a real `switch.*` entity.
+- If the charger has a separate state entity, set **Charger Status Entity** too.
 
 # Removal
 
@@ -206,17 +239,3 @@ To remove EV Guest:
 [buymecoffee]: https://buymeacoffee.com/dinnsen
 [my-ha-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
 [my-ha-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=Dinnsen&repository=EV-Guest&category=integration
-
-## Changelog
-
-### v0.3.1
-- Added missing input entities for SoC, Charger Power, Charge Limit, completion time and completion toggle.
-- Reworked completion time input to follow the selected 12h/24h format.
-- Fixed options/configure flow.
-- Fixed local brand images by shipping PNG assets.
-- Added tests to the package.
-
-
-## Updating from an older package
-
-When updating from an older EV Guest package, replace the entire `custom_components/ev_guest/` folder and the entire `tests/` folder. Do not mix old and new files. Restart Home Assistant after the HACS update.

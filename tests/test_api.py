@@ -16,6 +16,11 @@ def test_normalize_text_keeps_letters_numbers_and_plus() -> None:
     assert api.normalize_text(None) == ""
 
 
+def test_default_plate_provider_for_denmark() -> None:
+    assert api.get_default_plate_provider("Denmark") == "motorapi_dk"
+    assert "Denmark" in api.get_supported_countries()
+
+
 def test_extract_float_handles_multiple_input_types() -> None:
     assert api._extract_float(77) == 77.0
     assert api._extract_float("77,4 kWh") == 77.4

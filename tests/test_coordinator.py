@@ -176,3 +176,18 @@ def test_calculate_schedule_can_split_when_continuous_is_off(coordinator: EVGues
 
     assert result[RESULT_CHARGE_COSTS] < 17.09
     assert coordinator.data.results["plan_mode"] == "split"
+
+
+
+def test_charge_now_is_true_inside_active_schedule(coordinator: EVGuestCoordinator, fixed_now) -> None:
+    coordinator.data.results["charging_schedule"] = [
+        {"start": "2026-04-09T19:00:00+02:00", "value": 0},
+        {"start": "2026-04-09T20:00:00+02:00", "value": 1},
+        {"start": "2026-04-09T21:00:00+02:00", "value": 0},
+    ]
+    assert coordinator.is_charge_now() is True
+
+
+def test_read_charger_status_prefers_configured_status_entity(coordinator: EVGuestCoordinator) -> None:
+    coordinator.hass.states.get.return_value = MagicMock(state="on")
+    assert coordinator._read_charger_status() is True

@@ -6,9 +6,9 @@ from datetime import timedelta
 
 DOMAIN = "ev_guest"
 DEFAULT_NAME = "EV Guest"
-PLATFORMS = ["sensor", "button", "number", "text", "switch"]
+PLATFORMS = ["sensor", "button", "number", "text", "switch", "binary_sensor"]
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=30)
-USER_AGENT = "EVGuestHomeAssistant/0.5.1 (+https://github.com/Dinnsen/EV-Guest)"
+USER_AGENT = "EVGuestHomeAssistant/0.6.0 (+https://github.com/Dinnsen/EV-Guest)"
 
 MOTORAPI_BASE_URL = "https://v1.motorapi.dk"
 NHTSA_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/{vin}?format=json"
@@ -21,6 +21,17 @@ CONF_TIME_FORMAT = "time_format"
 CONF_DURATION_FORMAT = "duration_format"
 CONF_MOTORAPI_KEY = "motorapi_api_key"
 CONF_CHARGER_SWITCH_ENTITY = "charger_switch_entity"
+CONF_CHARGER_STATUS_ENTITY = "charger_status_entity"
+CONF_LANGUAGE = "language"
+CONF_COUNTRY = "country"
+CONF_PLATE_PROVIDER = "plate_provider"
+
+LANGUAGE_ENGLISH = "English"
+LANGUAGE_DANISH = "Dansk"
+COUNTRY_DENMARK = "Denmark"
+DEFAULT_LANGUAGE = LANGUAGE_ENGLISH
+DEFAULT_COUNTRY = COUNTRY_DENMARK
+DEFAULT_PLATE_PROVIDER = "motorapi_dk"
 
 TIME_FORMAT_24H = "24h"
 TIME_FORMAT_12H = "12h"
@@ -30,6 +41,8 @@ DURATION_FORMAT_HM = "hours_minutes"
 CURRENCIES = ["DKK", "EUR", "USD"]
 TIME_FORMATS = [TIME_FORMAT_24H, TIME_FORMAT_12H]
 DURATION_FORMATS = [DURATION_FORMAT_MINUTES, DURATION_FORMAT_HM]
+LANGUAGES = [LANGUAGE_ENGLISH, LANGUAGE_DANISH]
+COUNTRIES = [COUNTRY_DENMARK]
 
 INPUT_LICENSE_PLATE = "license_plate"
 INPUT_SOC = "soc"
@@ -52,6 +65,8 @@ RESULT_CAR_VARIANT = "car_variant"
 RESULT_CAR_BATTERY_CAPACITY = "car_battery_capacity"
 RESULT_STATUS = "status"
 
+DIAGNOSTIC_CHARGE_NOW = "charge_now"
+
 ATTR_LAST_LOOKUP = "last_lookup"
 ATTR_LAST_CALCULATION = "last_calculation"
 ATTR_LAST_SOURCE = "last_source"
@@ -64,6 +79,11 @@ ATTR_RAW_TWO_DAYS = "raw_two_days"
 ATTR_PLAN_MODE = "plan_mode"
 ATTR_CHARGER_CONTROL_ENABLED = "charger_control_enabled"
 ATTR_CHARGER_ENTITY = "charger_entity"
+ATTR_CHARGER_STATUS_ENTITY = "charger_status_entity"
+ATTR_CHARGER_IS_ON = "charger_is_on"
+ATTR_LANGUAGE = "language"
+ATTR_COUNTRY = "country"
+ATTR_PLATE_PROVIDER = "plate_provider"
 
 DATASET_CACHE_KEY = f"{DOMAIN}_open_ev_data_cache"
 

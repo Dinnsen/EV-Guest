@@ -11,7 +11,19 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_CHARGER_SWITCH_ENTITY,
+    CONF_COUNTRY,
+    CONF_CURRENCY,
+    CONF_DURATION_FORMAT,
+    CONF_LANGUAGE,
+    CONF_MOTORAPI_KEY,
+    CONF_PLATE_PROVIDER,
+    CONF_PRICE_ENTITY,
+    CONF_TIME_FORMAT,
+    DEFAULT_COUNTRY,
+    DEFAULT_LANGUAGE,
+    DEFAULT_PLATE_PROVIDER,
     DOMAIN,
     PLATFORMS,
     SERVICE_CALCULATE,
@@ -64,20 +76,24 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate older EV Guest config entries to the latest format."""
-    if entry.version >= 5:
+    if entry.version >= 6:
         return True
 
     new_data = dict(entry.data)
     new_data.setdefault("name", entry.title or "EV Guest")
-    new_data.setdefault("price_entity", "sensor.energi_data_service")
-    new_data.setdefault("currency", "DKK")
-    new_data.setdefault("time_format", "24h")
-    new_data.setdefault("duration_format", "minutes")
-    new_data.setdefault("motorapi_api_key", "")
+    new_data.setdefault(CONF_PRICE_ENTITY, "sensor.energi_data_service")
+    new_data.setdefault(CONF_CURRENCY, "DKK")
+    new_data.setdefault(CONF_TIME_FORMAT, "24h")
+    new_data.setdefault(CONF_DURATION_FORMAT, "minutes")
+    new_data.setdefault(CONF_MOTORAPI_KEY, "")
     new_data.setdefault(CONF_CHARGER_SWITCH_ENTITY, "")
+    new_data.setdefault(CONF_CHARGER_STATUS_ENTITY, "")
+    new_data.setdefault(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+    new_data.setdefault(CONF_COUNTRY, DEFAULT_COUNTRY)
+    new_data.setdefault(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER)
 
-    hass.config_entries.async_update_entry(entry, data=new_data, version=5, minor_version=0)
-    _LOGGER.info("Migrated EV Guest config entry %s to version 5.0", entry.entry_id)
+    hass.config_entries.async_update_entry(entry, data=new_data, version=6, minor_version=0)
+    _LOGGER.info("Migrated EV Guest config entry %s to version 6.0", entry.entry_id)
     return True
 
 

@@ -11,6 +11,8 @@ from typing import Any
 from aiohttp import ClientError, ClientSession
 
 from .const import (
+    COUNTRY_DENMARK,
+    DEFAULT_PLATE_PROVIDER,
     MOTORAPI_BASE_URL,
     NHTSA_DECODE_URL,
     OPEN_EV_DATA_FALLBACK_URL,
@@ -58,11 +60,23 @@ class BatteryLookupResult:
     raw: dict[str, Any] | None
 
 
+PLATE_PROVIDER_REGISTRY: dict[str, dict[str, Any]] = {
+    COUNTRY_DENMARK: {
+        "default": DEFAULT_PLATE_PROVIDER,
+        "providers": {
+            DEFAULT_PLATE_PROVIDER: {
+                "label": "MotorAPI Denmark",
+                "auth": "api_key",
+                "docs": "https://motorapi.dk/",
+            }
+        },
+    }
+}
+
 
 def clean_identifier(value: str) -> str:
     """Normalize plate/VIN strings."""
     return re.sub(r"[^A-Za-z0-9]", "", value or "").upper()
-
 
 
 def normalize_text(value: str | None) -> str:
@@ -71,6 +85,24 @@ def normalize_text(value: str | None) -> str:
         return ""
     return re.sub(r"[^a-z0-9+]", "", value.lower())
 
+
+def get_supported_countries() -> list[str]:
+    """Return currently supported countries."""
+    return list(PLATE_PROVIDER_REGISTRY)
+
+
+def get_default_plate_provider(country: str | None) -> str:
+    """Return the default vehicle lookup provider for a country."""
+    if not country:
+        return DEFAULT_PLATE_PROVIDER
+    return PLATE_PROVIDER_REGISTRY.get(country, {}).get("default", DEFAULT_PLATE_PROVIDER)
+
+
+def get_supported_plate_providers(country: str | None) -> dict[str, Any]:
+    """Return the provider mapping for a country."""
+    if not country:
+        country = COUNTRY_DENMARK
+    return PLATE_PROVIDER_REGISTRY.get(country, {}).get("providers", {})
 
 
 def _extract_float(value: Any) -> float | None:
@@ -104,6 +136,34 @@ async def async_validate_motorapi_key(session: ClientSession, api_key: str) -> N
         raise EVGuestLookupError("cannot_connect") from err
     except TimeoutError as err:
         raise EVGuestLookupError("timeout") from err
+
+
+async def async_validate_plate_provider_credentials(
+    session: ClientSession,
+    country: str | None,
+    provider: str | None,
+    api_key: str,
+) -> None:
+    """Validate credentials for the selected provider."""
+    provider_id = provider or get_default_plate_provider(country)
+    if provider_id == DEFAULT_PLATE_PROVIDER:
+        await async_validate_motorapi_key(session, api_key)
+        return
+    raise EVGuestLookupError("unsupported_provider")
+
+
+async def async_lookup_vehicle(
+    session: ClientSession,
+    plate: str,
+    api_key: str,
+    country: str | None,
+    provider: str | None = None,
+) -> VehicleLookupResult:
+    """Look up vehicle data using the selected provider."""
+    provider_id = provider or get_default_plate_provider(country)
+    if provider_id == DEFAULT_PLATE_PROVIDER:
+        return await async_lookup_vehicle_motorapi(session, plate, api_key)
+    raise EVGuestLookupError("unsupported_provider")
 
 
 async def async_lookup_vehicle_motorapi(session: ClientSession, plate: str, api_key: str) -> VehicleLookupResult:
@@ -216,7 +276,6 @@ async def _async_fetch_open_ev_dataset(session: ClientSession) -> Any:
     return []
 
 
-
 def _extract_year(value: Any) -> int | None:
     try:
         if value in (None, ""):
@@ -224,7 +283,6 @@ def _extract_year(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
-
 
 
 def _extract_candidates(node: Any, inherited_brand: str | None = None) -> list[dict[str, Any]]:
@@ -278,7 +336,6 @@ def _extract_candidates(node: Any, inherited_brand: str | None = None) -> list[d
         if isinstance(value, (list, dict)):
             items.extend(_extract_candidates(value, inherited_brand=brand))
     return items
-
 
 
 def _score_candidate(candidate: dict[str, Any], brand: str | None, model: str | None, variant: str | None, model_year: int | None) -> float:

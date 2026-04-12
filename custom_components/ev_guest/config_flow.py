@@ -9,18 +9,27 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import aiohttp_client, selector
 
-from .api import EVGuestAuthError, EVGuestLookupError, async_validate_motorapi_key
+from .api import EVGuestAuthError, EVGuestLookupError, async_validate_plate_provider_credentials
 from .const import (
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_CHARGER_SWITCH_ENTITY,
+    CONF_COUNTRY,
     CONF_CURRENCY,
     CONF_DURATION_FORMAT,
+    CONF_LANGUAGE,
     CONF_MOTORAPI_KEY,
+    CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
     CONF_TIME_FORMAT,
+    COUNTRIES,
     CURRENCIES,
+    DEFAULT_COUNTRY,
+    DEFAULT_LANGUAGE,
     DEFAULT_NAME,
+    DEFAULT_PLATE_PROVIDER,
     DOMAIN,
     DURATION_FORMATS,
+    LANGUAGES,
     TIME_FORMATS,
 )
 
@@ -33,10 +42,20 @@ def _price_entity_selector() -> selector.EntitySelector:
     )
 
 
-def _charger_entity_selector() -> selector.EntitySelector:
+def _charger_switch_entity_selector() -> selector.EntitySelector:
     return selector.EntitySelector(
         selector.EntitySelectorConfig(
-            filter=selector.EntityFilterSelectorConfig(domain=["switch"])
+            filter=selector.EntityFilterSelectorConfig(domain=["switch"]),
+            multiple=False,
+        )
+    )
+
+
+def _charger_status_entity_selector() -> selector.EntitySelector:
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            filter=selector.EntityFilterSelectorConfig(domain=["binary_sensor", "switch", "input_boolean"]),
+            multiple=False,
         )
     )
 
@@ -67,11 +86,27 @@ def _user_schema(defaults: dict[str, Any]) -> vol.Schema:
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(options=DURATION_FORMATS, mode=selector.SelectSelectorMode.DROPDOWN)
             ),
+            vol.Required(
+                CONF_LANGUAGE,
+                default=defaults.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=LANGUAGES, mode=selector.SelectSelectorMode.DROPDOWN)
+            ),
+            vol.Required(
+                CONF_COUNTRY,
+                default=defaults.get(CONF_COUNTRY, DEFAULT_COUNTRY),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=COUNTRIES, mode=selector.SelectSelectorMode.DROPDOWN)
+            ),
             vol.Required(CONF_MOTORAPI_KEY, default=defaults.get(CONF_MOTORAPI_KEY, "")): str,
             vol.Optional(
                 CONF_CHARGER_SWITCH_ENTITY,
-                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY, ""),
-            ): _charger_entity_selector(),
+                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY) or "",
+            ): vol.Any("", _charger_switch_entity_selector()),
+            vol.Optional(
+                CONF_CHARGER_STATUS_ENTITY,
+                default=defaults.get(CONF_CHARGER_STATUS_ENTITY) or "",
+            ): vol.Any("", _charger_status_entity_selector()),
         }
     )
 
@@ -101,22 +136,43 @@ def _options_schema(defaults: dict[str, Any]) -> vol.Schema:
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(options=DURATION_FORMATS, mode=selector.SelectSelectorMode.DROPDOWN)
             ),
+            vol.Required(
+                CONF_LANGUAGE,
+                default=defaults.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=LANGUAGES, mode=selector.SelectSelectorMode.DROPDOWN)
+            ),
+            vol.Required(
+                CONF_COUNTRY,
+                default=defaults.get(CONF_COUNTRY, DEFAULT_COUNTRY),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=COUNTRIES, mode=selector.SelectSelectorMode.DROPDOWN)
+            ),
             vol.Optional(CONF_MOTORAPI_KEY, default=defaults.get(CONF_MOTORAPI_KEY, "")): str,
             vol.Optional(
                 CONF_CHARGER_SWITCH_ENTITY,
-                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY, ""),
-            ): _charger_entity_selector(),
+                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY) or "",
+            ): vol.Any("", _charger_switch_entity_selector()),
+            vol.Optional(
+                CONF_CHARGER_STATUS_ENTITY,
+                default=defaults.get(CONF_CHARGER_STATUS_ENTITY) or "",
+            ): vol.Any("", _charger_status_entity_selector()),
         }
     )
 
 
-async def _validate_api_key(hass, api_key: str) -> None:
+async def _validate_api_key(hass, country: str, api_key: str, provider: str | None = None) -> None:
     session = aiohttp_client.async_get_clientsession(hass)
-    await async_validate_motorapi_key(session, api_key)
+    await async_validate_plate_provider_credentials(
+        session,
+        country=country,
+        provider=provider or DEFAULT_PLATE_PROVIDER,
+        api_key=api_key,
+    )
 
 
 class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 5
+    VERSION = 6
     MINOR_VERSION = 0
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
@@ -125,15 +181,22 @@ class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             defaults = user_input
             try:
-                await _validate_api_key(self.hass, user_input[CONF_MOTORAPI_KEY])
+                await _validate_api_key(
+                    self.hass,
+                    user_input[CONF_COUNTRY],
+                    user_input[CONF_MOTORAPI_KEY],
+                    DEFAULT_PLATE_PROVIDER,
+                )
             except EVGuestAuthError:
                 errors["base"] = "invalid_auth"
             except EVGuestLookupError as err:
                 errors["base"] = str(err)
             else:
+                entry_data = dict(user_input)
+                entry_data[CONF_PLATE_PROVIDER] = DEFAULT_PLATE_PROVIDER
                 await self.async_set_unique_id(user_input["name"])
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(title=user_input["name"], data=user_input)
+                return self.async_create_entry(title=user_input["name"], data=entry_data)
 
         return self.async_show_form(step_id="user", data_schema=_user_schema(defaults), errors=errors)
 
@@ -144,14 +207,20 @@ class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
+            assert self._reauth_entry is not None
+            current = {**self._reauth_entry.data, **self._reauth_entry.options}
             try:
-                await _validate_api_key(self.hass, user_input[CONF_MOTORAPI_KEY])
+                await _validate_api_key(
+                    self.hass,
+                    current.get(CONF_COUNTRY, DEFAULT_COUNTRY),
+                    user_input[CONF_MOTORAPI_KEY],
+                    current.get(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER),
+                )
             except EVGuestAuthError:
                 errors["base"] = "invalid_auth"
             except EVGuestLookupError as err:
                 errors["base"] = str(err)
             else:
-                assert self._reauth_entry is not None
                 self.hass.config_entries.async_update_entry(
                     self._reauth_entry,
                     data={**self._reauth_entry.data, CONF_MOTORAPI_KEY: user_input[CONF_MOTORAPI_KEY]},
@@ -179,12 +248,18 @@ class EVGuestOptionsFlow(config_entries.OptionsFlow):
         current = {**self._config_entry.data, **self._config_entry.options}
         if user_input is not None:
             merged = dict(user_input)
+            merged[CONF_PLATE_PROVIDER] = current.get(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER)
             api_key = (merged.get(CONF_MOTORAPI_KEY) or "").strip()
             if not api_key:
                 merged[CONF_MOTORAPI_KEY] = current.get(CONF_MOTORAPI_KEY, "")
                 return self.async_create_entry(data=merged)
             try:
-                await _validate_api_key(self.hass, api_key)
+                await _validate_api_key(
+                    self.hass,
+                    merged.get(CONF_COUNTRY, DEFAULT_COUNTRY),
+                    api_key,
+                    merged.get(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER),
+                )
             except EVGuestAuthError:
                 errors["base"] = "invalid_auth"
             except EVGuestLookupError as err:

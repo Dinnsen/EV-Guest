@@ -11,6 +11,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     ATTR_CHARGER_CONTROL_ENABLED,
     ATTR_CHARGER_ENTITY,
+    ATTR_CHARGER_IS_ON,
+    ATTR_CHARGER_STATUS_ENTITY,
+    ATTR_COUNTRY,
     ATTR_CHARGING_SCHEDULE,
     ATTR_FUEL_TYPE,
     ATTR_LAST_CALCULATION,
@@ -18,7 +21,9 @@ from .const import (
     ATTR_LAST_SOURCE,
     ATTR_MATCH_SCORE,
     ATTR_MODEL_YEAR,
+    ATTR_LANGUAGE,
     ATTR_PLAN_MODE,
+    ATTR_PLATE_PROVIDER,
     ATTR_RAW_TWO_DAYS,
     ATTR_VIN,
     RESULT_CAR_BATTERY_CAPACITY,
@@ -99,6 +104,11 @@ class EVGuestSensor(EVGuestCoordinatorEntity, SensorEntity):
             ATTR_PLAN_MODE: self.coordinator.data.results.get(ATTR_PLAN_MODE),
             ATTR_CHARGER_CONTROL_ENABLED: self.coordinator.data.results.get(ATTR_CHARGER_CONTROL_ENABLED),
             ATTR_CHARGER_ENTITY: self.coordinator.data.results.get(ATTR_CHARGER_ENTITY),
+            ATTR_CHARGER_STATUS_ENTITY: self.coordinator.data.results.get(ATTR_CHARGER_STATUS_ENTITY),
+            ATTR_CHARGER_IS_ON: self.coordinator.data.results.get(ATTR_CHARGER_IS_ON),
+            ATTR_LANGUAGE: self.coordinator.data.results.get(ATTR_LANGUAGE),
+            ATTR_COUNTRY: self.coordinator.data.results.get(ATTR_COUNTRY),
+            ATTR_PLATE_PROVIDER: self.coordinator.data.results.get(ATTR_PLATE_PROVIDER),
         }
 
     @property

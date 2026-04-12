@@ -28,10 +28,14 @@ def mock_config_entry() -> SimpleNamespace:
             "duration_format": "minutes",
             "motorapi_api_key": "test-key",
             "charger_switch_entity": "switch.test_charger",
+            "charger_status_entity": "binary_sensor.test_charger_status",
+            "language": "English",
+            "country": "Denmark",
+            "plate_provider": "motorapi_dk",
         },
         options={},
         runtime_data=None,
-        version=4,
+        version=5,
         minor_version=0,
     )
 

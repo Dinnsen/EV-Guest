@@ -24,29 +24,43 @@ from .api import (
     VehicleLookupResult,
     async_decode_vin_nhtsa,
     async_lookup_battery_open_ev_data,
-    async_lookup_vehicle_motorapi,
-    async_validate_motorapi_key,
+    async_lookup_vehicle,
+    async_validate_plate_provider_credentials,
+    get_default_plate_provider,
 )
 from .const import (
     ATTR_CHARGER_CONTROL_ENABLED,
     ATTR_CHARGER_ENTITY,
+    ATTR_CHARGER_IS_ON,
+    ATTR_CHARGER_STATUS_ENTITY,
     ATTR_CHARGING_SCHEDULE,
+    ATTR_COUNTRY,
     ATTR_FUEL_TYPE,
+    ATTR_LANGUAGE,
     ATTR_LAST_CALCULATION,
     ATTR_LAST_LOOKUP,
     ATTR_LAST_SOURCE,
     ATTR_MATCH_SCORE,
     ATTR_MODEL_YEAR,
     ATTR_PLAN_MODE,
+    ATTR_PLATE_PROVIDER,
     ATTR_RAW_TWO_DAYS,
     ATTR_VIN,
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_CHARGER_SWITCH_ENTITY,
+    CONF_COUNTRY,
     CONF_CURRENCY,
     CONF_DURATION_FORMAT,
+    CONF_LANGUAGE,
     CONF_MOTORAPI_KEY,
+    CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
     CONF_TIME_FORMAT,
+    DEFAULT_COUNTRY,
+    DEFAULT_LANGUAGE,
+    DEFAULT_PLATE_PROVIDER,
     DEFAULT_SCAN_INTERVAL,
+    DIAGNOSTIC_CHARGE_NOW,
     DOMAIN,
     DURATION_FORMAT_HM,
     INPUT_BATTERY_CAPACITY,
@@ -99,6 +113,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self.config_entry = entry
         self.session: ClientSession = async_get_clientsession(hass)
         self._remove_price_listener: CALLBACK_TYPE | None = None
+        self._remove_status_listener: CALLBACK_TYPE | None = None
         self._availability_logged: dict[str, bool] = {}
         self._scheduled_callbacks: list[CALLBACK_TYPE] = []
         self.data = EVGuestData(
@@ -136,6 +151,11 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 ATTR_PLAN_MODE: "continuous",
                 ATTR_CHARGER_CONTROL_ENABLED: False,
                 ATTR_CHARGER_ENTITY: self.config.get(CONF_CHARGER_SWITCH_ENTITY) or None,
+                ATTR_CHARGER_STATUS_ENTITY: self.config.get(CONF_CHARGER_STATUS_ENTITY) or None,
+                ATTR_CHARGER_IS_ON: self._read_charger_status(),
+                ATTR_LANGUAGE: self.config.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+                ATTR_COUNTRY: self.config.get(CONF_COUNTRY, DEFAULT_COUNTRY),
+                ATTR_PLATE_PROVIDER: self.plate_provider,
             },
             service_health={"motorapi": True, "nhtsa": True, "open_ev_data": True},
         )
@@ -148,6 +168,14 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     def currency(self) -> str:
         return self.config.get(CONF_CURRENCY, "DKK")
 
+    @property
+    def country(self) -> str:
+        return self.config.get(CONF_COUNTRY, DEFAULT_COUNTRY)
+
+    @property
+    def plate_provider(self) -> str:
+        return self.config.get(CONF_PLATE_PROVIDER) or get_default_plate_provider(self.country)
+
     async def async_initialize(self) -> None:
         await self._async_validate_setup()
         parsed_time = self._parse_completion_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME))
@@ -159,11 +187,23 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             [price_entity],
             self._handle_price_update,
         )
+        charger_status_entity = self.config.get(CONF_CHARGER_STATUS_ENTITY)
+        if charger_status_entity:
+            self._remove_status_listener = async_track_state_change_event(
+                self.hass,
+                [charger_status_entity],
+                self._handle_status_update,
+            )
         await self.async_refresh()
 
     async def _async_validate_setup(self) -> None:
         try:
-            await async_validate_motorapi_key(self.session, self.config[CONF_MOTORAPI_KEY])
+            await async_validate_plate_provider_credentials(
+                self.session,
+                self.country,
+                self.plate_provider,
+                self.config[CONF_MOTORAPI_KEY],
+            )
             self._set_service_health("motorapi", True)
         except EVGuestAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
@@ -174,13 +214,29 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         if self._remove_price_listener:
             self._remove_price_listener()
             self._remove_price_listener = None
+        if self._remove_status_listener:
+            self._remove_status_listener()
+            self._remove_status_listener = None
         self._cancel_scheduled_actions()
 
     @callback
     def _handle_price_update(self, event: Event) -> None:
         self.hass.async_create_task(self.async_calculate())
 
+    @callback
+    def _handle_status_update(self, event: Event) -> None:
+        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status()
+        self.async_update_listeners()
+        if self.is_charge_now() and bool(self.data.inputs.get(INPUT_ENABLE_CHARGER_CONTROL, False)):
+            self.hass.async_create_task(self._async_reconcile_charger_state())
+
     async def _async_update_data(self) -> EVGuestData:
+        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status()
+        self.data.results[ATTR_LANGUAGE] = self.config.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+        self.data.results[ATTR_COUNTRY] = self.country
+        self.data.results[ATTR_PLATE_PROVIDER] = self.plate_provider
+        self.data.results[ATTR_CHARGER_ENTITY] = self.config.get(CONF_CHARGER_SWITCH_ENTITY) or None
+        self.data.results[ATTR_CHARGER_STATUS_ENTITY] = self.config.get(CONF_CHARGER_STATUS_ENTITY) or None
         return self.data
 
     async def async_set_input_value(self, key: str, value: Any) -> None:
@@ -236,7 +292,13 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             return
 
         try:
-            motor = await async_lookup_vehicle_motorapi(self.session, plate, self.config[CONF_MOTORAPI_KEY])
+            motor = await async_lookup_vehicle(
+                self.session,
+                plate,
+                self.config[CONF_MOTORAPI_KEY],
+                self.country,
+                self.plate_provider,
+            )
             self._set_service_health("motorapi", True)
         except EVGuestAuthError as err:
             self._set_service_health("motorapi", False)
@@ -262,27 +324,25 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             normalized.variant,
             normalized.model_year,
         )
-        self._set_service_health("open_ev_data", battery.raw is not None or battery.match_score is None)
+        self._set_service_health("open_ev_data", battery.raw is not None or battery.battery_capacity is None)
 
-        self.data.results[RESULT_CAR_BRAND] = normalized.brand
-        self.data.results[RESULT_CAR_MODEL] = normalized.model
-        self.data.results[RESULT_CAR_VARIANT] = normalized.variant
-        self.data.results[ATTR_VIN] = normalized.vin
-        self.data.results[ATTR_MODEL_YEAR] = normalized.model_year
-        self.data.results[ATTR_FUEL_TYPE] = normalized.fuel_type
-        self.data.results[ATTR_LAST_LOOKUP] = self._local_now().isoformat()
-        self.data.results[ATTR_LAST_SOURCE] = ", ".join(
-            source for source in [motor.source, decoded.source if decoded else None, battery.source] if source
+        self.data.results.update(
+            {
+                RESULT_CAR_BRAND: normalized.brand,
+                RESULT_CAR_MODEL: normalized.model,
+                RESULT_CAR_VARIANT: normalized.variant,
+                RESULT_CAR_BATTERY_CAPACITY: battery.battery_capacity,
+                ATTR_VIN: normalized.vin,
+                ATTR_MODEL_YEAR: normalized.model_year,
+                ATTR_FUEL_TYPE: normalized.fuel_type,
+                ATTR_MATCH_SCORE: battery.match_score,
+                ATTR_LAST_SOURCE: f"{normalized.source} + {battery.source}",
+                ATTR_LAST_LOOKUP: self._local_now().isoformat(),
+            }
         )
-        self.data.results[ATTR_MATCH_SCORE] = battery.match_score
-
-        if battery.battery_capacity is not None:
-            self.data.results[RESULT_CAR_BATTERY_CAPACITY] = round(battery.battery_capacity, 1)
-            self.data.inputs[INPUT_BATTERY_CAPACITY] = round(battery.battery_capacity, 1)
-            self.data.results[RESULT_STATUS] = "Car data loaded"
-        else:
-            self.data.results[RESULT_STATUS] = "Car data loaded, battery match not confident"
-
+        if battery.battery_capacity:
+            self.data.inputs[INPUT_BATTERY_CAPACITY] = battery.battery_capacity
+        self.data.results[RESULT_STATUS] = "Car data updated"
         self.async_update_listeners()
 
     def _merge_vehicle_results(
@@ -313,6 +373,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self.data.results.update(calculation)
         self.data.results[ATTR_LAST_CALCULATION] = self._local_now().isoformat()
         self.data.results[RESULT_STATUS] = "Calculation ready"
+        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status()
         await self._async_apply_charger_plan(calculation["plan_segments"])
         self.async_update_listeners()
 
@@ -380,6 +441,10 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self.data.results[ATTR_PLAN_MODE] = mode
         self.data.results[ATTR_CHARGER_CONTROL_ENABLED] = bool(self.data.inputs.get(INPUT_ENABLE_CHARGER_CONTROL, False))
         self.data.results[ATTR_CHARGER_ENTITY] = self.config.get(CONF_CHARGER_SWITCH_ENTITY) or None
+        self.data.results[ATTR_CHARGER_STATUS_ENTITY] = self.config.get(CONF_CHARGER_STATUS_ENTITY) or None
+        self.data.results[ATTR_LANGUAGE] = self.config.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+        self.data.results[ATTR_COUNTRY] = self.country
+        self.data.results[ATTR_PLATE_PROVIDER] = self.plate_provider
 
         start = min(segment["start"] for segment in plan_segments)
         end = max(segment["end"] for segment in plan_segments)
@@ -557,6 +622,45 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         domain = charger_entity.split(".", 1)[0]
         service = "turn_on" if turn_on else "turn_off"
         await self.hass.services.async_call(domain, service, {"entity_id": charger_entity}, blocking=False)
+        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status() if self.config.get(CONF_CHARGER_STATUS_ENTITY) else turn_on
+
+    async def _async_reconcile_charger_state(self) -> None:
+        charger_entity = self.config.get(CONF_CHARGER_SWITCH_ENTITY)
+        if not charger_entity or not self.config.get(CONF_CHARGER_STATUS_ENTITY):
+            return
+        desired = self.is_charge_now()
+        actual = self._read_charger_status()
+        if actual is None or actual == desired:
+            return
+        await self._async_set_charger_state(desired)
+
+    def _read_charger_status(self) -> bool | None:
+        entity_id = self.config.get(CONF_CHARGER_STATUS_ENTITY) or self.config.get(CONF_CHARGER_SWITCH_ENTITY)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return None
+        raw = str(state.state).lower()
+        if raw in {"on", "home", "open", "true", "charging", "connected"}:
+            return True
+        if raw in {"off", "not_charging", "closed", "false", "idle", "unavailable", "unknown"}:
+            return False
+        return None
+
+    def is_charge_now(self, now: datetime | None = None) -> bool:
+        now = now or self._local_now()
+        for segment in self.data.results.get(ATTR_CHARGING_SCHEDULE, []):
+            start_raw = segment.get("start")
+            if not start_raw:
+                continue
+            start = dt_util.parse_datetime(start_raw)
+            if start is None:
+                continue
+            end = start + timedelta(hours=1)
+            if start <= now < end and float(segment.get("value", 0)) > 0:
+                return True
+        return False
 
     def _local_now(self) -> datetime:
         return dt_util.now()

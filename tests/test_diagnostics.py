@@ -20,7 +20,7 @@ async def test_diagnostics_redacts_sensitive_values(mock_hass) -> None:
         runtime_data=SimpleNamespace(
             data=SimpleNamespace(
                 inputs={"license_plate": "EN17765", "soc": 42},
-                results={"vin": "W1N1234567890", "car_model": "EQB"},
+                results={"vin": "W1N1234567890", "car_model": "EQB", "charger_is_on": True},
                 service_health={"motorapi": True},
             )
         ),
@@ -31,4 +31,5 @@ async def test_diagnostics_redacts_sensitive_values(mock_hass) -> None:
     assert diagnostics["entry"]["motorapi_api_key"] == "**REDACTED**"
     assert diagnostics["inputs"]["license_plate"] == "**REDACTED**"
     assert diagnostics["results"]["vin"] == "**REDACTED**"
+    assert diagnostics["results"]["charger_is_on"] is True
     assert diagnostics["service_health"] == {"motorapi": True}
