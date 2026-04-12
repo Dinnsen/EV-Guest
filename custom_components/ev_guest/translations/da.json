@@ -1,0 +1,133 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EV Guest",
+        "description": "Opsæt EV Guest.",
+        "data": {
+          "name": "Navn",
+          "price_entity": "Elpris-sensor",
+          "currency": "Valuta for ladeomkostning",
+          "time_format": "Tidsformat",
+          "duration_format": "Format for ladetid",
+          "motorapi_api_key": "MotorAPI API-nøgle",
+          "charger_switch_entity": "Lader switch-entity",
+          "charger_status_entity": "Lader status-entity",
+          "language": "Sprog",
+          "country": "Land",
+          "plate_provider": "Nummerplade-udbyder"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Genforbind MotorAPI",
+        "description": "Opdater MotorAPI API-nøglen."
+      }
+    },
+    "error": {
+      "invalid_auth": "Ugyldig API-nøgle",
+      "cannot_connect": "Kan ikke oprette forbindelse til tjenesten",
+      "timeout": "Forespørgslen overskred tidsgrænsen",
+      "vehicle_not_found": "Køretøj blev ikke fundet",
+      "missing_api_key": "API-nøgle er påkrævet"
+    },
+    "abort": {
+      "reauth_successful": "Genforbindelse lykkedes"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EV Guest indstillinger",
+        "description": "Lad MotorAPI API-nøglen stå tom for at beholde den nuværende.",
+        "data": {
+          "name": "Navn",
+          "price_entity": "Elpris-sensor",
+          "currency": "Valuta for ladeomkostning",
+          "time_format": "Tidsformat",
+          "duration_format": "Format for ladetid",
+          "motorapi_api_key": "MotorAPI API-nøgle",
+          "charger_switch_entity": "Lader switch-entity",
+          "charger_status_entity": "Lader status-entity",
+          "language": "Sprog",
+          "country": "Land",
+          "plate_provider": "Nummerplade-udbyder"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "grab_car_data": {
+        "name": "Hent bildata"
+      },
+      "calculate": {
+        "name": "Beregn"
+      }
+    },
+    "number": {
+      "soc": {
+        "name": "SoC (State of Charge)"
+      },
+      "battery_capacity": {
+        "name": "Batterikapacitet"
+      },
+      "charger_power": {
+        "name": "Ladeeffekt"
+      },
+      "charge_limit": {
+        "name": "Ladegrænse"
+      }
+    },
+    "sensor": {
+      "charging_speed": {
+        "name": "Ladehastighed"
+      },
+      "charge_start_time": {
+        "name": "Ladestart"
+      },
+      "charge_end_time": {
+        "name": "Ladeslut"
+      },
+      "charge_time": {
+        "name": "Ladetid"
+      },
+      "charge_costs": {
+        "name": "Ladeomkostning"
+      },
+      "car_brand": {
+        "name": "Bil mærke"
+      },
+      "car_model": {
+        "name": "Bil model"
+      },
+      "car_variant": {
+        "name": "Bil variant"
+      },
+      "car_battery_capacity": {
+        "name": "Bil batterikapacitet"
+      },
+      "status": {
+        "name": "Status"
+      }
+    },
+    "text": {
+      "license_plate": {
+        "name": "Nummerplade"
+      },
+      "charge_completion_time": {
+        "name": "Færdig ladet kl."
+      }
+    },
+    "switch": {
+      "use_completion_time": {
+        "name": "Brug færdig ladet kl."
+      },
+      "enable_charger_control": {
+        "name": "Aktivér laderstyring"
+      },
+      "continuous_charging_preferred": {
+        "name": "Foretræk kontinuerlig opladning"
+      }
+    }
+  }
+}
