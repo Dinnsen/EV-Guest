@@ -35,7 +35,7 @@ def mock_config_entry() -> SimpleNamespace:
         },
         options={},
         runtime_data=None,
-        version=5,
+        version=6,
         minor_version=0,
     )
 
