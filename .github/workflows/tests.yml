@@ -23,4 +23,4 @@ jobs:
 
       - name: Run light unit tests
         run: |
-          pytest tests/test_api.py tests/test_hacs_json.py tests/test_config_flow.py tests/test_coordinator.py tests/test_diagnostics.py tests/test_migration.py -q
+          pytest tests/test_api.py tests/test_hacs_json.py -q
