@@ -16,7 +16,7 @@ def test_normalize_text_keeps_letters_numbers_and_plus() -> None:
 
 def test_default_plate_provider_for_denmark() -> None:
     assert api.get_default_plate_provider("DK") == "motorapi_dk"
-    assert "DK" in api.get_supported_countries()
+    assert "Denmark" in api.get_supported_countries()
 
 
 def test_extract_float_handles_multiple_input_types() -> None:

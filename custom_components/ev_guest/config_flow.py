@@ -59,6 +59,9 @@ def _charger_status_entity_selector() -> selector.EntitySelector:
         )
     )
 
+def _normalize_optional_entity(value: Any) -> str:
+    """Normalize optional entity selector values for storage."""
+    return value or ""
 
 def _user_schema(defaults: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
@@ -101,12 +104,12 @@ def _user_schema(defaults: dict[str, Any]) -> vol.Schema:
             vol.Required(CONF_MOTORAPI_KEY, default=defaults.get(CONF_MOTORAPI_KEY, "")): str,
             vol.Optional(
                 CONF_CHARGER_SWITCH_ENTITY,
-                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY) or "",
-            ): vol.Any("", _charger_switch_entity_selector()),
+                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY) or None,
+            ): _charger_switch_entity_selector(),
             vol.Optional(
                 CONF_CHARGER_STATUS_ENTITY,
-                default=defaults.get(CONF_CHARGER_STATUS_ENTITY) or "",
-            ): vol.Any("", _charger_status_entity_selector()),
+                default=defaults.get(CONF_CHARGER_STATUS_ENTITY) or None,
+            ): _charger_status_entity_selector(),
         }
     )
 
@@ -151,12 +154,12 @@ def _options_schema(defaults: dict[str, Any]) -> vol.Schema:
             vol.Optional(CONF_MOTORAPI_KEY, default=defaults.get(CONF_MOTORAPI_KEY, "")): str,
             vol.Optional(
                 CONF_CHARGER_SWITCH_ENTITY,
-                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY) or "",
-            ): vol.Any("", _charger_switch_entity_selector()),
+                default=defaults.get(CONF_CHARGER_SWITCH_ENTITY) or None,
+            ): _charger_switch_entity_selector(),
             vol.Optional(
                 CONF_CHARGER_STATUS_ENTITY,
-                default=defaults.get(CONF_CHARGER_STATUS_ENTITY) or "",
-            ): vol.Any("", _charger_status_entity_selector()),
+                default=defaults.get(CONF_CHARGER_STATUS_ENTITY) or None,
+            ): _charger_status_entity_selector(),
         }
     )
 
@@ -194,6 +197,12 @@ class EVGuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 entry_data = dict(user_input)
                 entry_data[CONF_PLATE_PROVIDER] = DEFAULT_PLATE_PROVIDER
+                entry_data[CONF_CHARGER_SWITCH_ENTITY] = _normalize_optional_entity(
+                    user_input.get(CONF_CHARGER_SWITCH_ENTITY)
+                )
+                entry_data[CONF_CHARGER_STATUS_ENTITY] = _normalize_optional_entity(
+                    user_input.get(CONF_CHARGER_STATUS_ENTITY)
+                )
                 await self.async_set_unique_id(user_input["name"])
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=user_input["name"], data=entry_data)
@@ -249,6 +258,12 @@ class EVGuestOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             merged = dict(user_input)
             merged[CONF_PLATE_PROVIDER] = current.get(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER)
+            merged[CONF_CHARGER_SWITCH_ENTITY] = _normalize_optional_entity(
+                user_input.get(CONF_CHARGER_SWITCH_ENTITY)
+            )
+            merged[CONF_CHARGER_STATUS_ENTITY] = _normalize_optional_entity(
+                user_input.get(CONF_CHARGER_STATUS_ENTITY)
+            )
             api_key = (merged.get(CONF_MOTORAPI_KEY) or "").strip()
             if not api_key:
                 merged[CONF_MOTORAPI_KEY] = current.get(CONF_MOTORAPI_KEY, "")
