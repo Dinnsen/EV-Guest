@@ -9,8 +9,6 @@
 
 EV Guest for Home Assistant helps you find the cheapest charging window for guest EVs **without connecting the car to Home Assistant**.
 
-Version **0.6.0** keeps the stable entity model from v0.4.0/v0.5.1 and adds optional charger status awareness, language and country selection in configuration, and a new **Charge Now** diagnostic binary sensor for automations.
-
 The integration:
 - looks up vehicle identity from the guest's license plate
 - enriches vehicle data from the VIN when available
@@ -60,7 +58,6 @@ During setup, EV Guest asks for:
 - **Charge Costs Currency** (`DKK`, `EUR`, `USD`)
 - **Clock format** (`24h` or `12h`)
 - **Charge Time format** (`minutes` or `hours_minutes`)
-- **Language** (`English`, `Dansk`)
 - **Country** (`Denmark`)
 - **MotorAPI API key**
 - **Optional Charger Switch Entity** (`switch.*`) for direct on/off charging control
@@ -77,7 +74,6 @@ After setup, the options flow lets you change:
 - Charge Costs Currency
 - Clock format
 - Charge Time format
-- Language
 - Country
 - MotorAPI API key
 - Charger Switch Entity (optional)
