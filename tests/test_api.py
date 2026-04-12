@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from custom_components.ev_guest import api
+import importlib.util
+from pathlib import Path
+
+API_PATH = Path(__file__).resolve().parents[1] / "custom_components" / "ev_guest" / "api.py"
+SPEC = importlib.util.spec_from_file_location("ev_guest_api", API_PATH)
+assert SPEC is not None
+assert SPEC.loader is not None
+api = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(api)
 
 
 def test_clean_identifier_removes_spaces_and_symbols() -> None:
