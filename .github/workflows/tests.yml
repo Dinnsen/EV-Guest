@@ -3,6 +3,7 @@ name: Tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   pytest:
@@ -21,6 +22,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest aiohttp voluptuous homeassistant
 
-      - name: Run light unit tests
+      - name: Run unit tests
         run: |
-          pytest tests/test_api.py tests/test_hacs_json.py -q
+          pytest tests -q
