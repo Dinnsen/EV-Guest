@@ -16,14 +16,12 @@ if str(ROOT) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
-def patch_data_update_coordinator_init(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch DataUpdateCoordinator init for lightweight unit tests.
+def patch_data_update_coordinator_init(monkeypatch):
+    """Patch Home Assistant's DataUpdateCoordinator init for lightweight unit tests.
 
-    The GitHub Actions test job installs the runtime Home Assistant package but
-    not the full HA pytest harness. Newer HA versions call frame helpers inside
-    DataUpdateCoordinator.__init__, which raises ``RuntimeError: Frame helper not
-    set up`` in these unit-style tests. Patch only the test harness, not the
-    integration runtime.
+    Newer Home Assistant versions perform frame-helper checks inside
+    DataUpdateCoordinator.__init__, which fail in this stripped-down pytest setup.
+    The integration runtime code is not touched; this only affects tests.
     """
 
     def _fake_init(self, hass, logger, *, name=None, update_interval=None, always_update=True, config_entry=None):
@@ -35,13 +33,6 @@ def patch_data_update_coordinator_init(monkeypatch: pytest.MonkeyPatch) -> None:
         self.config_entry = config_entry
         self.data = None
         self.last_update_success = True
-        self.last_exception = None
-        self._listeners = {}
-        self._unsub_refresh = None
-        self._request_refresh_task = None
-        self._refresh_lock = None
-        self._debounced_refresh = None
-        self._shutdown_requested = False
 
     monkeypatch.setattr(DataUpdateCoordinator, "__init__", _fake_init)
 
@@ -90,7 +81,7 @@ def hass(mock_hass: MagicMock) -> MagicMock:
 
 
 @pytest.fixture
-def fixed_now(monkeypatch: pytest.MonkeyPatch):
+def fixed_now(monkeypatch):
     """Freeze dt_util.now() to a fixed Copenhagen-aware datetime."""
     now = dt_util.parse_datetime("2026-04-09T20:00:00+02:00")
     monkeypatch.setattr(dt_util, "now", lambda: now)
