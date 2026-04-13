@@ -408,12 +408,15 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         prices = self._extract_price_slots()
         if not prices:
             raise ValueError("No usable price data available from selected price sensor")
+
+        visible_prices = prices[:48]
         self.data.results[ATTR_RAW_TWO_DAYS] = [
-            {"start": dt.isoformat(), "value": price} for dt, price in prices[:48]
+            {"start": dt.isoformat(), "value": price} for dt, price in visible_prices
         ]
 
         now = self._local_now()
-        valid_prices = [slot for slot in prices if now <= slot[0]]
+        planning_prices = prices if use_completion_time else visible_prices
+        valid_prices = [slot for slot in planning_prices if now <= slot[0]]
         completion_dt = None
         if use_completion_time:
             completion_dt = self._next_completion_datetime(now, completion_time)
@@ -437,7 +440,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         if not plan_segments:
             raise ValueError("No valid charging window found")
 
-        self.data.results[ATTR_CHARGING_SCHEDULE] = self._segments_to_schedule(plan_segments, prices[:48])
+        self.data.results[ATTR_CHARGING_SCHEDULE] = self._segments_to_schedule(plan_segments, visible_prices)
         self.data.results[ATTR_PLAN_MODE] = mode
         self.data.results[ATTR_CHARGER_CONTROL_ENABLED] = bool(self.data.inputs.get(INPUT_ENABLE_CHARGER_CONTROL, False))
         self.data.results[ATTR_CHARGER_ENTITY] = self.config.get(CONF_CHARGER_SWITCH_ENTITY) or None

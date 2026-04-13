@@ -7,15 +7,15 @@
 [![HACS][hacs-shield]][hacs]
 [![BuyMeCoffee][buymecoffee-shield]][buymecoffee]
 
-EV Guest for Home Assistant helps you find the cheapest charging window for guest EVs **without connecting the car to Home Assistant**.
+EV Guest for Home Assistant helps you find the cheapest charging window for guest EVs without connecting the car to Home Assistant.
 
 The integration:
 - looks up vehicle identity from the guest's license plate
 - enriches vehicle data from the VIN when available
 - matches the vehicle against Open EV Data to estimate battery capacity
 - combines that with a supported electricity price sensor to calculate the cheapest charging plan
-- can optionally control **one charger switch entity** directly
-- can optionally observe a separate **charger status entity**
+- can optionally control one charger switch entity directly
+- can optionally observe a separate charger status entity
 
 ## Table of content
 - [Installation](#installation)
@@ -34,11 +34,9 @@ The integration:
 
 ### Option 1 - HACS
 - Ensure HACS is installed.
-- Add this repository as a **custom repository** in HACS with category **Integration**.
-- Install **EV Guest**.
+- Add this repository as a custom repository in HACS with category Integration.
+- Install EV Guest.
 - Restart Home Assistant.
-
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.][my-ha-badge]][my-ha-url]
 
 ### Option 2 - Manual
 - Download the latest release.
@@ -47,22 +45,28 @@ The integration:
 
 # Setup
 
-Add **EV Guest** from **Settings → Devices & Services**.
+Add EV Guest from Settings → Devices & Services.
+
+Before setup, create a MotorAPI API key:
+1. Go to https://www.motorapi.dk/
+2. Enter your email address under **Få adgang nu**
+3. Submit the form and wait for the email with your API key
+4. Paste that API key into EV Guest during setup
 
 During setup, EV Guest asks for:
-- **Name**
-- **Electricity Price Sensor**
-- **Charge Costs Currency** (`DKK`, `EUR`, `USD`)
-- **Clock format** (`24h` or `12h`)
-- **Charge Time format** (`minutes` or `hours_minutes`)
-- **Country** (`Denmark`)
-- **MotorAPI API key**
-- **Optional Charger Switch Entity** (`switch.*`) for direct on/off charging control
-- **Optional Charger Status Entity** (`binary_sensor.*`, `switch.*`, or `input_boolean.*`) so EV Guest can see whether the charger currently reports on/off
+- Name
+- Electricity Price Sensor
+- Charge Costs Currency (`DKK`, `EUR`, `USD`)
+- Clock format (`24h` or `12h`)
+- Charge Time format (`minutes` or `hours_minutes`)
+- Country (`Denmark`)
+- MotorAPI API key
+- Optional Charger Switch Entity (`switch.*`) for direct on/off charging control
+- Optional Charger Status Entity (`binary_sensor.*`, `switch.*`, or `input_boolean.*`) so EV Guest can see whether the charger currently reports on/off
 
 No user setup is needed for:
-- **NHTSA vPIC**
-- **Open EV Data**
+- NHTSA vPIC
+- Open EV Data
 
 # Configuration options
 
@@ -77,7 +81,7 @@ After setup, the options flow lets you change:
 - Charger Status Entity (optional)
 
 ### Charger Switch Entity
-Optional. Used only when **Enable Charger Control** is turned on inside EV Guest. If left blank, EV Guest still calculates plans but will not try to start or stop a charger.
+Optional. Used only when Enable Charger Control is turned on inside EV Guest. If left blank, EV Guest still calculates plans but will not try to start or stop a charger.
 
 ### Charger Status Entity
 Optional. Lets EV Guest read whether the charger currently appears to be on or off. This is useful when the switch used to control charging is different from the entity that reports charging state.
@@ -85,11 +89,11 @@ Optional. Lets EV Guest read whether the charger currently appears to be on or o
 # Usage
 
 1. Enter the plate in the license-plate text entity.
-2. Press **Grab Car Data**.
+2. Press Grab Car Data.
 3. Review the returned brand, model, variant, and battery estimate.
 4. Set SoC, charger power, charge limit, and completion time.
-5. Press **Calculate**.
-6. Turn on **Enable Charger Control** only if you want EV Guest to control the configured charger switch.
+5. Press Calculate.
+6. Turn on Enable Charger Control only if you want EV Guest to control the configured charger switch.
 
 If the online battery match is weak, set battery capacity manually and calculate again.
 
@@ -124,7 +128,7 @@ If the online battery match is weak, set battery capacity manually and calculate
 - Charge Now
 
 ### Charge Now
-`binary_sensor.charge_now` is **on** whenever the current time is inside the planned charging window and **off** otherwise. It is intended for automations, dashboards and external charger logic.
+`binary_sensor.charge_now` is on whenever the current time is inside the planned charging window and off otherwise. It is intended for automations, dashboards and external charger logic.
 
 # Supported electricity price sensors
 
@@ -138,8 +142,8 @@ The example sensor `sensor.energi_data_service` fits this pattern.
 # Vehicle lookup providers
 
 Currently supported:
-- **Country:** Denmark
-- **Default provider:** MotorAPI Denmark
+- Country: Denmark
+- Default provider: MotorAPI Denmark
 
 The code is structured so additional countries and providers can be added later through pull requests without changing the stable entity model.
 
@@ -147,17 +151,9 @@ The code is structured so additional countries and providers can be added later 
 
 EV Guest listens for state changes on the selected electricity-price sensor and recalculates when needed. If a charger status entity is configured, EV Guest also listens for its state changes so the current charger status can be reflected in diagnostics and automations.
 
-# Screenshots
-
-Place screenshots here:
-- `docs/screenshots/overview.png`
-- `docs/screenshots/setup_step_1.png`
-- `docs/screenshots/setup_step_2.png`
-- `docs/screenshots/entities.png`
-
 # Legal information
 
-EV Guest is **not affiliated with, endorsed by, or maintained by** Home Assistant, MotorAPI, NHTSA, or Open EV Data.
+EV Guest is not affiliated with, endorsed by, or maintained by Home Assistant, MotorAPI, NHTSA, or Open EV Data.
 
 Third-party sources used:
 - MotorAPI for Danish license plate and VIN lookup
@@ -169,17 +165,15 @@ License plates, VINs, and derived vehicle metadata may be sent to external servi
 # Removal
 
 To remove EV Guest:
-- Go to **Settings → Devices & Services**
-- Open **EV Guest**
-- Choose **Delete**
+- Go to Settings → Devices & Services
+- Open EV Guest
+- Choose Delete
 - Restart Home Assistant if you installed it manually and want to remove the files from `custom_components`
 
-[releases-shield]: https://img.shields.io/github/release/Dinnsen/EV-Guest.svg?style=for-the-badge
-[releases]: https://github.com/Dinnsen/EV-Guest/releases
+[releases-shield]: https://img.shields.io/github/v/release/Dinnsen/EV-Guest?style=for-the-badge
 [download-all-shield]: https://img.shields.io/github/downloads/Dinnsen/EV-Guest/total?style=for-the-badge
-[hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
-[hacs]: https://www.hacs.xyz/
-[buymecoffee-shield]: https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000
+[hacs-shield]: https://img.shields.io/badge/HACS-Custom-blue.svg?style=for-the-badge
+[buymecoffee-shield]: https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?style=for-the-badge
+[releases]: https://github.com/Dinnsen/EV-Guest/releases
+[hacs]: https://github.com/hacs/integration
 [buymecoffee]: https://buymeacoffee.com/dinnsen
-[my-ha-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
-[my-ha-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=Dinnsen&repository=EV-Guest&category=integration

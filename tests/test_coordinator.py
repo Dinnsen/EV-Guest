@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import time, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -191,3 +191,47 @@ def test_charge_now_is_true_inside_active_schedule(coordinator: EVGuestCoordinat
 def test_read_charger_status_prefers_configured_status_entity(coordinator: EVGuestCoordinator) -> None:
     coordinator.hass.states.get.return_value = MagicMock(state="on")
     assert coordinator._read_charger_status() is True
+
+
+def test_calculate_schedule_without_completion_time_uses_visible_two_day_horizon(
+    coordinator: EVGuestCoordinator, fixed_now
+) -> None:
+    coordinator.data.inputs.update(
+        {
+            INPUT_SOC: 0,
+            INPUT_BATTERY_CAPACITY: 10,
+            INPUT_CHARGER_POWER: 10,
+            INPUT_CHARGE_LIMIT: 10,
+            INPUT_USE_COMPLETION_TIME: False,
+            INPUT_CONTINUOUS_CHARGING_PREFERRED: False,
+            INPUT_ENABLE_CHARGER_CONTROL: False,
+        }
+    )
+
+    forecast = []
+    for offset in range(48):
+        forecast.append(
+            {
+                "hour": (fixed_now + timedelta(hours=offset)).isoformat(),
+                "price": 1.0,
+            }
+        )
+    forecast.append(
+        {
+            "hour": (fixed_now + timedelta(hours=48)).isoformat(),
+            "price": 0.01,
+        }
+    )
+
+    coordinator.hass.states.get.return_value = MagicMock(
+        state="1.00",
+        attributes={"forecast": forecast},
+    )
+
+    result = coordinator._calculate_schedule()
+
+    assert result[RESULT_CHARGE_START_TIME] == "20:00"
+    assert len(coordinator.data.results["raw_two_days"]) == 48
+    assert any(
+        entry["value"] == 1.0 for entry in coordinator.data.results["charging_schedule"]
+    )
