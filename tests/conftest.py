@@ -1,5 +1,4 @@
 """Shared pytest helpers for EV Guest."""
-
 from __future__ import annotations
 
 import sys
@@ -29,13 +28,12 @@ def mock_config_entry() -> SimpleNamespace:
             "motorapi_api_key": "test-key",
             "charger_switch_entity": "switch.test_charger",
             "charger_status_entity": "binary_sensor.test_charger_status",
-            "language": "English",
             "country": "Denmark",
             "plate_provider": "motorapi_dk",
         },
         options={},
         runtime_data=None,
-        version=6,
+        version=7,
         minor_version=0,
     )
 
@@ -51,6 +49,12 @@ def mock_hass() -> MagicMock:
     hass.config_entries = MagicMock()
     hass.config_entries.async_update_entry = MagicMock()
     return hass
+
+
+@pytest.fixture
+def hass(mock_hass: MagicMock) -> MagicMock:
+    """Alias mock_hass for tests that expect a hass fixture."""
+    return mock_hass
 
 
 @pytest.fixture
