@@ -7,11 +7,25 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+
+@pytest.fixture(autouse=True)
+def patch_data_update_coordinator(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid Home Assistant frame-helper checks in lightweight unit tests.
+
+    The unit tests in this repository instantiate the coordinator with mocked
+    Home Assistant objects rather than a fully initialized HA test harness.
+    Newer HA versions trigger a frame-helper error inside
+    DataUpdateCoordinator.__init__ in that setup.
+    """
+
+    monkeypatch.setattr(DataUpdateCoordinator, "__init__", lambda self, *args, **kwargs: None)
 
 
 @pytest.fixture
