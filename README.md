@@ -1,6 +1,6 @@
 # EV Guest
 
-![EV Guest](https://raw.githubusercontent.com/Dinnsen/EV-Guest/main/docs/assets/EV-Guest.jpg)
+![EV Guest](https://raw.githubusercontent.com/Dinnsen/EV-Guest/main/docs/assets/logo.png)
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub All Releases][download-all-shield]][releases]
@@ -14,7 +14,7 @@ The integration:
 - enriches vehicle data from the VIN when available
 - matches the vehicle against Open EV Data to estimate battery capacity
 - combines that with a supported electricity price sensor to calculate the cheapest charging plan
-- can optionally control **one charger switch entity** directly (Model A)
+- can optionally control **one charger switch entity** directly
 - can optionally observe a separate **charger status entity**
 
 ## Table of content
@@ -27,10 +27,7 @@ The integration:
 - [Supported electricity price sensors](#supported-electricity-price-sensors)
 - [Vehicle lookup providers](#vehicle-lookup-providers)
 - [Data update behavior](#data-update-behavior)
-- [Screenshots](#screenshots)
 - [Legal information](#legal-information)
-- [Known limitations](#known-limitations)
-- [Troubleshooting](#troubleshooting)
 - [Removal](#removal)
 
 # Installation
@@ -129,24 +126,6 @@ If the online battery match is weak, set battery capacity manually and calculate
 ### Charge Now
 `binary_sensor.charge_now` is **on** whenever the current time is inside the planned charging window and **off** otherwise. It is intended for automations, dashboards and external charger logic.
 
-## Dummy charger testing
-A dedicated built-in dummy charger entity is **not** part of the integration package in v0.6.0. For testing, use a Home Assistant helper-based test setup such as an `input_boolean` combined with a template switch, and point **Charger Switch Entity** and optionally **Charger Status Entity** at those helpers.
-
-# Service actions
-
-EV Guest registers two service actions during integration setup:
-- `ev_guest.grab_car_data`
-- `ev_guest.calculate`
-
-Both require `entry_id`.
-
-Example:
-```yaml
-service: ev_guest.calculate
-data:
-  entry_id: 1234567890abcdef
-```
-
 # Supported electricity price sensors
 
 EV Guest works with sensors exposing hourly prices in one of these layouts:
@@ -157,8 +136,6 @@ EV Guest works with sensors exposing hourly prices in one of these layouts:
 The example sensor `sensor.energi_data_service` fits this pattern.
 
 # Vehicle lookup providers
-
-v0.6.0 adds an extensible country/provider structure.
 
 Currently supported:
 - **Country:** Denmark
@@ -188,35 +165,6 @@ Third-party sources used:
 - Open EV Data for battery matching
 
 License plates, VINs, and derived vehicle metadata may be sent to external services while lookups are performed. Users are responsible for their own API keys and third-party service usage.
-
-# Known limitations
-
-- Battery matching is best effort.
-- Some variants differ across years and markets.
-- Currency selection changes the unit label only; it does not perform FX conversion.
-- Charging is calculated as a linear AC session from user-supplied charger power.
-- Only Denmark is included as a country option in v0.6.0.
-
-# Troubleshooting
-
-### Car data not found
-- Check the plate format.
-- Check the MotorAPI key.
-- Some cars may not have a confident battery match.
-
-### Sensors unavailable
-- The external lookup service may be down.
-- Reauthenticate the integration if the MotorAPI key has changed.
-
-### Charge cost looks wrong
-- Confirm the selected electricity price sensor.
-- Confirm future hourly prices are present.
-- Confirm battery capacity and charger power.
-
-### Charger does not start or stop
-- Confirm **Enable Charger Control** is on.
-- Confirm **Charger Switch Entity** is set to a real `switch.*` entity.
-- If the charger has a separate state entity, set **Charger Status Entity** too.
 
 # Removal
 
