@@ -1,5 +1,4 @@
 """Shared pytest helpers for EV Guest."""
-
 from __future__ import annotations
 
 import sys
@@ -8,11 +7,34 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+
+@pytest.fixture(autouse=True)
+def patch_data_update_coordinator_init(monkeypatch):
+    """Patch Home Assistant's DataUpdateCoordinator init for lightweight unit tests.
+
+    Newer Home Assistant versions perform frame-helper checks inside
+    DataUpdateCoordinator.__init__, which fail in this stripped-down pytest setup.
+    The integration runtime code is not touched; this only affects tests.
+    """
+
+    def _fake_init(self, hass, logger, *, name=None, update_interval=None, always_update=True, config_entry=None):
+        self.hass = hass
+        self.logger = logger
+        self.name = name
+        self.update_interval = update_interval
+        self.always_update = always_update
+        self.config_entry = config_entry
+        self.data = None
+        self.last_update_success = True
+
+    monkeypatch.setattr(DataUpdateCoordinator, "__init__", _fake_init)
 
 
 @pytest.fixture
@@ -29,13 +51,12 @@ def mock_config_entry() -> SimpleNamespace:
             "motorapi_api_key": "test-key",
             "charger_switch_entity": "switch.test_charger",
             "charger_status_entity": "binary_sensor.test_charger_status",
-            "language": "English",
             "country": "Denmark",
             "plate_provider": "motorapi_dk",
         },
         options={},
         runtime_data=None,
-        version=6,
+        version=7,
         minor_version=0,
     )
 
@@ -51,6 +72,12 @@ def mock_hass() -> MagicMock:
     hass.config_entries = MagicMock()
     hass.config_entries.async_update_entry = MagicMock()
     return hass
+
+
+@pytest.fixture
+def hass(mock_hass: MagicMock) -> MagicMock:
+    """Alias mock_hass for tests that expect a hass fixture."""
+    return mock_hass
 
 
 @pytest.fixture
