@@ -42,7 +42,8 @@ jobs:
               print(f"::notice title=Coverage::{total.group(1)}")
           summary = text[text.find("short test summary"):] if "short test summary" in text else ""
           failures = text[text.find("= FAILURES ="):] if "= FAILURES =" in text else ""
-          for title, body in (("Failures", failures), ("Summary", summary)):
+          tail = "" if (failures or summary) else text[-4000:]
+          for title, body in (("Failures", failures), ("Summary", summary), ("Output", tail)):
               for i in range(0, min(len(body), 24000), 4000):
                   chunk = body[i:i + 4000].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
                   print(f"::error title={title}::{chunk}")
