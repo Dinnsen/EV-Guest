@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "EV Guest",
-        "description": "Set up EV Guest.",
+        "description": "Set up EV Guest. The MotorAPI key is only needed for license plate lookup.",
         "data": {
           "name": "Name",
           "price_entity": "Electricity price sensor",
@@ -11,9 +11,7 @@
           "time_format": "Clock format",
           "duration_format": "Charge time format",
           "country": "Country",
-          "motorapi_api_key": "MotorAPI API key",
-          "charger_switch_entity": "Charger switch entity (optional)",
-          "charger_status_entity": "Charger status entity (optional)"
+          "motorapi_api_key": "MotorAPI API key (optional)"
         }
       },
       "reauth_confirm": {
@@ -44,9 +42,7 @@
           "time_format": "Clock format",
           "duration_format": "Charge time format",
           "country": "Country",
-          "motorapi_api_key": "MotorAPI API key",
-          "charger_switch_entity": "Charger switch entity (optional)",
-          "charger_status_entity": "Charger status entity (optional)"
+          "motorapi_api_key": "MotorAPI API key (optional)"
         }
       }
     }
@@ -122,9 +118,6 @@
     "switch": {
       "use_completion_time": {
         "name": "Use Charge Completion Time"
-      },
-      "enable_charger_control": {
-        "name": "Enable Charger Control"
       },
       "continuous_charging_preferred": {
         "name": "Continuous Charging Preferred"

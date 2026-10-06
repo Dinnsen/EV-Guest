@@ -15,6 +15,7 @@ from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_point_in_time, async_track_state_change_event
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -29,38 +30,29 @@ from .api import (
     get_default_plate_provider,
 )
 from .const import (
-    ATTR_CHARGER_CONTROL_ENABLED,
-    ATTR_CHARGER_ENTITY,
-    ATTR_CHARGER_IS_ON,
-    ATTR_CHARGER_STATUS_ENTITY,
     ATTR_CHARGING_SCHEDULE,
+    ATTR_CHARGING_SEGMENTS,
     ATTR_COUNTRY,
     ATTR_FUEL_TYPE,
-    ATTR_LANGUAGE,
     ATTR_LAST_CALCULATION,
     ATTR_LAST_LOOKUP,
     ATTR_LAST_SOURCE,
     ATTR_MATCH_SCORE,
     ATTR_MODEL_YEAR,
+    ATTR_PLAN_LOCKED,
     ATTR_PLAN_MODE,
     ATTR_PLATE_PROVIDER,
     ATTR_RAW_TWO_DAYS,
     ATTR_VIN,
-    CONF_CHARGER_STATUS_ENTITY,
-    CONF_CHARGER_SWITCH_ENTITY,
     CONF_COUNTRY,
     CONF_CURRENCY,
     CONF_DURATION_FORMAT,
-    CONF_LANGUAGE,
     CONF_MOTORAPI_KEY,
     CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
     CONF_TIME_FORMAT,
     DEFAULT_COUNTRY,
-    DEFAULT_LANGUAGE,
-    DEFAULT_PLATE_PROVIDER,
     DEFAULT_SCAN_INTERVAL,
-    DIAGNOSTIC_CHARGE_NOW,
     DOMAIN,
     DURATION_FORMAT_HM,
     INPUT_BATTERY_CAPACITY,
@@ -68,7 +60,6 @@ from .const import (
     INPUT_CHARGE_LIMIT,
     INPUT_CHARGER_POWER,
     INPUT_CONTINUOUS_CHARGING_PREFERRED,
-    INPUT_ENABLE_CHARGER_CONTROL,
     INPUT_LICENSE_PLATE,
     INPUT_SOC,
     INPUT_USE_COMPLETION_TIME,
@@ -82,6 +73,8 @@ from .const import (
     RESULT_CHARGE_TIME,
     RESULT_CHARGING_SPEED,
     RESULT_STATUS,
+    STORAGE_KEY,
+    STORAGE_VERSION,
     TIME_FORMAT_12H,
 )
 
@@ -113,9 +106,18 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self.config_entry = entry
         self.session: ClientSession = async_get_clientsession(hass)
         self._remove_price_listener: CALLBACK_TYPE | None = None
-        self._remove_status_listener: CALLBACK_TYPE | None = None
         self._availability_logged: dict[str, bool] = {}
-        self._scheduled_callbacks: list[CALLBACK_TYPE] = []
+        self._boundary_callbacks: list[CALLBACK_TYPE] = []
+        # Planned charging intervals as (start, end) datetimes. This is the
+        # source of truth for charge_now; charging_schedule is hourly and only
+        # meant for graphs.
+        self._plan_segments: list[dict[str, datetime]] = []
+        # Automatic recalculation on price updates is only allowed after the
+        # user has requested a calculation, and only until the plan starts.
+        self._auto_recalculate = False
+        self._store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, STORAGE_KEY.format(entry_id=entry.entry_id)
+        )
         self.data = EVGuestData(
             inputs={
                 INPUT_LICENSE_PLATE: "",
@@ -125,7 +127,6 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 INPUT_CHARGE_LIMIT: 80.0,
                 INPUT_CHARGE_COMPLETION_TIME: "07:00",
                 INPUT_USE_COMPLETION_TIME: True,
-                INPUT_ENABLE_CHARGER_CONTROL: False,
                 INPUT_CONTINUOUS_CHARGING_PREFERRED: True,
             },
             results={
@@ -149,11 +150,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 ATTR_CHARGING_SCHEDULE: [],
                 ATTR_RAW_TWO_DAYS: [],
                 ATTR_PLAN_MODE: "continuous",
-                ATTR_CHARGER_CONTROL_ENABLED: False,
-                ATTR_CHARGER_ENTITY: self.config.get(CONF_CHARGER_SWITCH_ENTITY) or None,
-                ATTR_CHARGER_STATUS_ENTITY: self.config.get(CONF_CHARGER_STATUS_ENTITY) or None,
-                ATTR_CHARGER_IS_ON: self._read_charger_status(),
-                ATTR_LANGUAGE: self.config.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+                ATTR_CHARGING_SEGMENTS: [],
                 ATTR_COUNTRY: self.config.get(CONF_COUNTRY, DEFAULT_COUNTRY),
                 ATTR_PLATE_PROVIDER: self.plate_provider,
             },
@@ -176,8 +173,13 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     def plate_provider(self) -> str:
         return self.config.get(CONF_PLATE_PROVIDER) or get_default_plate_provider(self.country)
 
+    @property
+    def has_motorapi_key(self) -> bool:
+        return bool(str(self.config.get(CONF_MOTORAPI_KEY) or "").strip())
+
     async def async_initialize(self) -> None:
         await self._async_validate_setup()
+        await self._async_load_state()
         parsed_time = self._parse_completion_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME))
         if parsed_time is not None:
             self.data.inputs[INPUT_CHARGE_COMPLETION_TIME] = self._format_time_for_input(parsed_time)
@@ -187,16 +189,18 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             [price_entity],
             self._handle_price_update,
         )
-        charger_status_entity = self.config.get(CONF_CHARGER_STATUS_ENTITY)
-        if charger_status_entity:
-            self._remove_status_listener = async_track_state_change_event(
-                self.hass,
-                [charger_status_entity],
-                self._handle_status_update,
-            )
+        self._schedule_plan_boundaries()
         await self.async_refresh()
 
     async def _async_validate_setup(self) -> None:
+        """Validate the MotorAPI key, if one is configured.
+
+        The plate lookup is optional: without a key EV Guest still works as a
+        calculator. Connection problems never block setup, only an invalid key
+        triggers reauthentication.
+        """
+        if not self.has_motorapi_key:
+            return
         try:
             await async_validate_plate_provider_credentials(
                 self.session,
@@ -208,36 +212,76 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         except EVGuestAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except EVGuestLookupError as err:
-            raise ConfigEntryError(str(err)) from err
+            if str(err) == "unsupported_provider":
+                raise ConfigEntryError(str(err)) from err
+            _LOGGER.warning("Could not validate MotorAPI key during setup: %s", err)
+            self._set_service_health("motorapi", False)
 
     async def async_shutdown(self) -> None:
         if self._remove_price_listener:
             self._remove_price_listener()
             self._remove_price_listener = None
-        if self._remove_status_listener:
-            self._remove_status_listener()
-            self._remove_status_listener = None
-        self._cancel_scheduled_actions()
+        self._cancel_plan_boundaries()
 
     @callback
     def _handle_price_update(self, event: Event) -> None:
-        self.hass.async_create_task(self.async_calculate())
-
-    @callback
-    def _handle_status_update(self, event: Event) -> None:
-        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status()
-        self.async_update_listeners()
-        if self.is_charge_now() and bool(self.data.inputs.get(INPUT_ENABLE_CHARGER_CONTROL, False)):
-            self.hass.async_create_task(self._async_reconcile_charger_state())
+        if not self._auto_recalculate or self.is_plan_locked():
+            return
+        self.hass.async_create_task(self.async_calculate(manual=False))
 
     async def _async_update_data(self) -> EVGuestData:
-        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status()
-        self.data.results[ATTR_LANGUAGE] = self.config.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
         self.data.results[ATTR_COUNTRY] = self.country
         self.data.results[ATTR_PLATE_PROVIDER] = self.plate_provider
-        self.data.results[ATTR_CHARGER_ENTITY] = self.config.get(CONF_CHARGER_SWITCH_ENTITY) or None
-        self.data.results[ATTR_CHARGER_STATUS_ENTITY] = self.config.get(CONF_CHARGER_STATUS_ENTITY) or None
         return self.data
+
+    # ------------------------------------------------------------------
+    # Persistence
+
+    async def _async_load_state(self) -> None:
+        stored = await self._store.async_load()
+        if not isinstance(stored, dict):
+            return
+        for key, value in (stored.get("inputs") or {}).items():
+            if key in self.data.inputs:
+                self.data.inputs[key] = value
+        for key, value in (stored.get("results") or {}).items():
+            if key in self.data.results:
+                self.data.results[key] = value
+        self._plan_segments = self._parse_segments(stored.get("segments") or [])
+        self._auto_recalculate = bool(stored.get("auto_recalculate", False))
+
+    @callback
+    def _async_save_state(self) -> None:
+        self._store.async_delay_save(self._data_to_store, 1)
+
+    @callback
+    def _data_to_store(self) -> dict[str, Any]:
+        return {
+            "inputs": dict(self.data.inputs),
+            "results": dict(self.data.results),
+            "segments": self._serialize_segments(self._plan_segments),
+            "auto_recalculate": self._auto_recalculate,
+        }
+
+    @staticmethod
+    def _serialize_segments(segments: list[dict[str, datetime]]) -> list[dict[str, str]]:
+        return [
+            {"start": segment["start"].isoformat(), "end": segment["end"].isoformat()}
+            for segment in segments
+        ]
+
+    @staticmethod
+    def _parse_segments(raw: list[Any]) -> list[dict[str, datetime]]:
+        segments: list[dict[str, datetime]] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            start = dt_util.parse_datetime(str(item.get("start", "")))
+            end = dt_util.parse_datetime(str(item.get("end", "")))
+            if start is None or end is None or end <= start:
+                continue
+            segments.append({"start": start, "end": end})
+        return sorted(segments, key=lambda seg: seg["start"])
 
     async def async_set_input_value(self, key: str, value: Any) -> None:
         if key == INPUT_CHARGE_COMPLETION_TIME:
@@ -248,6 +292,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 return
             value = self._format_time_for_input(parsed)
         self.data.inputs[key] = value
+        self._async_save_state()
         self.async_update_listeners()
 
     def get_completion_time_text(self) -> str:
@@ -290,6 +335,10 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             self.data.results[RESULT_STATUS] = "License plate is required"
             self.async_update_listeners()
             return
+        if not self.has_motorapi_key:
+            self.data.results[RESULT_STATUS] = "MotorAPI API key not configured - enter battery capacity manually"
+            self.async_update_listeners()
+            return
 
         try:
             motor = await async_lookup_vehicle(
@@ -300,9 +349,12 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 self.plate_provider,
             )
             self._set_service_health("motorapi", True)
-        except EVGuestAuthError as err:
+        except EVGuestAuthError:
             self._set_service_health("motorapi", False)
-            raise ConfigEntryAuthFailed(str(err)) from err
+            self.data.results[RESULT_STATUS] = "Invalid MotorAPI API key"
+            self.config_entry.async_start_reauth(self.hass)
+            self.async_update_listeners()
+            return
         except EVGuestLookupError as err:
             self._set_service_health("motorapi", False if str(err) in {"cannot_connect", "timeout"} else True)
             self.data.results[RESULT_STATUS] = f"Lookup failed: {err}"
@@ -343,6 +395,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         if battery.battery_capacity:
             self.data.inputs[INPUT_BATTERY_CAPACITY] = battery.battery_capacity
         self.data.results[RESULT_STATUS] = "Car data updated"
+        self._async_save_state()
         self.async_update_listeners()
 
     def _merge_vehicle_results(
@@ -362,19 +415,37 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             raw=primary.raw,
         )
 
-    async def async_calculate(self) -> None:
+    async def async_calculate(self, manual: bool = True) -> None:
+        """Calculate the cheapest charging plan.
+
+        EV Guest only knows the SoC at the time of calculation, it never sees
+        the car's live SoC. A plan is therefore locked once it has started:
+        automatic recalculations (price updates) are skipped from then on, so
+        a static start SoC can never make the plan slide or repeat. Pressing
+        Calculate always makes a fresh plan.
+        """
+        if manual:
+            self._auto_recalculate = True
+        elif self.is_plan_locked():
+            return
+
         try:
             calculation = self._calculate_schedule()
         except ValueError as err:
             self.data.results[RESULT_STATUS] = str(err)
+            if manual:
+                # Do not keep following an old plan the user tried to replace.
+                self._set_plan([])
+            self._async_save_state()
             self.async_update_listeners()
             return
 
+        segments = calculation.pop("plan_segments")
         self.data.results.update(calculation)
         self.data.results[ATTR_LAST_CALCULATION] = self._local_now().isoformat()
         self.data.results[RESULT_STATUS] = "Calculation ready"
-        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status()
-        await self._async_apply_charger_plan(calculation["plan_segments"])
+        self._set_plan(segments)
+        self._async_save_state()
         self.async_update_listeners()
 
     def _calculate_schedule(self) -> dict[str, Any]:
@@ -442,10 +513,6 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
 
         self.data.results[ATTR_CHARGING_SCHEDULE] = self._segments_to_schedule(plan_segments, visible_prices)
         self.data.results[ATTR_PLAN_MODE] = mode
-        self.data.results[ATTR_CHARGER_CONTROL_ENABLED] = bool(self.data.inputs.get(INPUT_ENABLE_CHARGER_CONTROL, False))
-        self.data.results[ATTR_CHARGER_ENTITY] = self.config.get(CONF_CHARGER_SWITCH_ENTITY) or None
-        self.data.results[ATTR_CHARGER_STATUS_ENTITY] = self.config.get(CONF_CHARGER_STATUS_ENTITY) or None
-        self.data.results[ATTR_LANGUAGE] = self.config.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
         self.data.results[ATTR_COUNTRY] = self.country
         self.data.results[ATTR_PLATE_PROVIDER] = self.plate_provider
 
@@ -516,7 +583,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
 
         start = cheapest_window["window"][0][0]
         end = start + timedelta(minutes=charge_minutes)
-        return ([{"start": start, "end": end, "value": 1.0}], cheapest_window["cost"])
+        return ([{"start": start, "end": end}], cheapest_window["cost"])
 
     def _select_discrete_segments(
         self,
@@ -526,29 +593,56 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         charge_minutes: int,
         completion_dt: datetime | None,
     ) -> tuple[list[dict[str, Any]], float]:
-        hours_needed = ceil(required_hours)
-        cheapest_hours = sorted(valid_prices, key=lambda item: item[1])[:hours_needed]
-        chosen = sorted(cheapest_hours, key=lambda item: item[0])
+        """Pick the cheapest hours, not necessarily adjacent.
 
-        remaining_hours = required_hours
+        Full hours go to the cheapest slots. A remaining partial hour goes to
+        the next-cheapest slot (the most expensive one chosen), which is the
+        cheapest possible split. Slots must end before the completion time.
+        """
+        candidates = valid_prices
+        if completion_dt:
+            candidates = [slot for slot in valid_prices if slot[0] + timedelta(hours=1) <= completion_dt]
+
+        hours_needed = ceil(required_hours)
+        if len(candidates) < hours_needed:
+            return [], 0.0
+
+        by_price = sorted(candidates, key=lambda item: (item[1], item[0]))[:hours_needed]
+        full_hours = int(required_hours)
+        fraction = required_hours - full_hours
         energy_per_hour = energy_needed_kwh / required_hours
+
+        full_slots = by_price[:full_hours]
+        full_starts = {start for start, _price in full_slots}
         total_cost = 0.0
         segments: list[dict[str, Any]] = []
+        for start, price in full_slots:
+            segments.append({"start": start, "end": start + timedelta(hours=1)})
+            total_cost += price * energy_per_hour
 
-        for start, price in chosen:
-            if completion_dt and start >= completion_dt:
-                continue
-            fraction = min(1.0, remaining_hours)
-            end = start + timedelta(hours=fraction)
-            segments.append({"start": start, "end": end, "value": 1.0})
+        if fraction > 1e-9:
+            start, price = by_price[full_hours]
+            duration = timedelta(hours=fraction)
+            slot_end = start + timedelta(hours=1)
+            if slot_end in full_starts:
+                # Place the partial charge at the end of its hour so it joins
+                # the following charging hour instead of leaving a gap.
+                segments.append({"start": slot_end - duration, "end": slot_end})
+            else:
+                segments.append({"start": start, "end": start + duration})
             total_cost += price * energy_per_hour * fraction
-            remaining_hours -= fraction
-            if remaining_hours <= 0:
-                break
 
-        if remaining_hours > 0:
-            return [], 0.0
-        return segments, total_cost
+        return self._merge_segments(segments), total_cost
+
+    @staticmethod
+    def _merge_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        for segment in sorted(segments, key=lambda seg: seg["start"]):
+            if merged and segment["start"] <= merged[-1]["end"]:
+                merged[-1]["end"] = max(merged[-1]["end"], segment["end"])
+            else:
+                merged.append({"start": segment["start"], "end": segment["end"]})
+        return merged
 
     def _segments_to_schedule(
         self,
@@ -580,90 +674,49 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             remaining -= fraction
         return total
 
-    async def _async_apply_charger_plan(self, plan_segments: list[dict[str, Any]]) -> None:
-        self._cancel_scheduled_actions()
-        charger_entity = self.config.get(CONF_CHARGER_SWITCH_ENTITY)
-        charger_control = bool(self.data.inputs.get(INPUT_ENABLE_CHARGER_CONTROL, False))
-        if not charger_control or not charger_entity:
-            return
+    # ------------------------------------------------------------------
+    # Plan state and charge_now
 
+    @callback
+    def _set_plan(self, segments: list[dict[str, Any]]) -> None:
+        self._plan_segments = [{"start": seg["start"], "end": seg["end"]} for seg in segments]
+        self.data.results[ATTR_CHARGING_SEGMENTS] = self._serialize_segments(self._plan_segments)
+        if not segments:
+            self.data.results[ATTR_CHARGING_SCHEDULE] = []
+        self._schedule_plan_boundaries()
+
+    @callback
+    def _schedule_plan_boundaries(self) -> None:
+        """Push a state update exactly when charge_now should change."""
+        self._cancel_plan_boundaries()
         now = self._local_now()
-        for segment in plan_segments:
-            start = segment["start"]
-            end = segment["end"]
-            if end <= now:
-                continue
-            if start <= now < end:
-                await self._async_set_charger_state(True)
-                self._scheduled_callbacks.append(
-                    async_track_point_in_time(self.hass, self._make_charger_callback(False), end)
-                )
-            else:
-                self._scheduled_callbacks.append(
-                    async_track_point_in_time(self.hass, self._make_charger_callback(True), start)
-                )
-                self._scheduled_callbacks.append(
-                    async_track_point_in_time(self.hass, self._make_charger_callback(False), end)
-                )
+        for segment in self._plan_segments:
+            for moment in (segment["start"], segment["end"]):
+                if moment > now:
+                    self._boundary_callbacks.append(
+                        async_track_point_in_time(self.hass, self._handle_plan_boundary, moment)
+                    )
 
-    def _cancel_scheduled_actions(self) -> None:
-        while self._scheduled_callbacks:
-            remove = self._scheduled_callbacks.pop()
+    @callback
+    def _cancel_plan_boundaries(self) -> None:
+        while self._boundary_callbacks:
+            remove = self._boundary_callbacks.pop()
             remove()
 
-    def _make_charger_callback(self, turn_on: bool):
-        @callback
-        def _callback(_now) -> None:
-            self.hass.async_create_task(self._async_set_charger_state(turn_on))
+    @callback
+    def _handle_plan_boundary(self, _now: datetime) -> None:
+        self.async_update_listeners()
 
-        return _callback
-
-    async def _async_set_charger_state(self, turn_on: bool) -> None:
-        charger_entity = self.config.get(CONF_CHARGER_SWITCH_ENTITY)
-        if not charger_entity:
-            return
-        domain = charger_entity.split(".", 1)[0]
-        service = "turn_on" if turn_on else "turn_off"
-        await self.hass.services.async_call(domain, service, {"entity_id": charger_entity}, blocking=False)
-        self.data.results[ATTR_CHARGER_IS_ON] = self._read_charger_status() if self.config.get(CONF_CHARGER_STATUS_ENTITY) else turn_on
-
-    async def _async_reconcile_charger_state(self) -> None:
-        charger_entity = self.config.get(CONF_CHARGER_SWITCH_ENTITY)
-        if not charger_entity or not self.config.get(CONF_CHARGER_STATUS_ENTITY):
-            return
-        desired = self.is_charge_now()
-        actual = self._read_charger_status()
-        if actual is None or actual == desired:
-            return
-        await self._async_set_charger_state(desired)
-
-    def _read_charger_status(self) -> bool | None:
-        entity_id = self.config.get(CONF_CHARGER_STATUS_ENTITY) or self.config.get(CONF_CHARGER_SWITCH_ENTITY)
-        if not entity_id:
-            return None
-        state = self.hass.states.get(entity_id)
-        if state is None:
-            return None
-        raw = str(state.state).lower()
-        if raw in {"on", "home", "open", "true", "charging", "connected"}:
-            return True
-        if raw in {"off", "not_charging", "closed", "false", "idle", "unavailable", "unknown"}:
+    def is_plan_locked(self, now: datetime | None = None) -> bool:
+        """True once the current plan has started (also after it has finished)."""
+        if not self._plan_segments:
             return False
-        return None
+        now = now or self._local_now()
+        return self._plan_segments[0]["start"] <= now
 
     def is_charge_now(self, now: datetime | None = None) -> bool:
         now = now or self._local_now()
-        for segment in self.data.results.get(ATTR_CHARGING_SCHEDULE, []):
-            start_raw = segment.get("start")
-            if not start_raw:
-                continue
-            start = dt_util.parse_datetime(start_raw)
-            if start is None:
-                continue
-            end = start + timedelta(hours=1)
-            if start <= now < end and float(segment.get("value", 0)) > 0:
-                return True
-        return False
+        return any(segment["start"] <= now < segment["end"] for segment in self._plan_segments)
 
     def _local_now(self) -> datetime:
         return dt_util.now()
