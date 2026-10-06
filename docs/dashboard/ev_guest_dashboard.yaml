@@ -340,6 +340,10 @@ views:
           entity: sensor.ev_guest_charge_time
           name: Charge Time
           show_state: true
+      - type: grid
+        columns: 1
+        square: false
+        cards:
         - type: custom:bubble-card
           card_type: button
           entity: sensor.ev_guest_charge_start_time
