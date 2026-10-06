@@ -24,6 +24,7 @@ EV Guest is a calculator: it never switches a charger itself. Pair it with a sim
 - [Usage](#usage)
 - [Entities](#entities)
 - [Actions](#actions)
+- [Dashboard](#dashboard)
 - [Charging the car](#charging-the-car)
 - [Live SoC](#live-soc)
 - [How data is updated](#how-data-is-updated)
@@ -137,6 +138,30 @@ Both take an optional `config_entry_id`; it can be left out when you have only o
 ```yaml
 action: ev_guest.calculate
 ```
+
+## Dashboard
+
+<!-- SCREENSHOT -->
+
+[`docs/dashboard/ev_guest_dashboard.yaml`](docs/dashboard/ev_guest_dashboard.yaml) is a ready-made dashboard: license plate lookup, car data, inputs, the charging plan and a two-day price graph with the planned charging hours.
+
+**It needs three custom cards from HACS** (HACS → search → Download, then reload the browser):
+
+| Card | Used for |
+| --- | --- |
+| [Bubble Card](https://github.com/Clooos/Bubble-Card) | Headers, buttons and sliders |
+| [ApexCharts Card](https://github.com/RomRider/apexcharts-card) | Price graph with the charging plan |
+| [Vertical Stack In Card](https://github.com/ofekashery/vertical-stack-in-card) | Groups the graph with its title |
+
+**To add it:**
+
+1. Go to **Settings → Dashboards → Add dashboard → New dashboard from scratch**, and open the new dashboard.
+2. Choose **⋮ → Edit dashboard → ⋮ → Raw configuration editor**.
+3. Paste the contents of `ev_guest_dashboard.yaml` and save.
+
+To add it as a tab in an existing dashboard instead, paste only the view (everything under `views:`) into that dashboard's raw configuration.
+
+The entity IDs assume your EV Guest is named *EV Guest*. If you chose another name, replace `ev_guest_` with your own prefix. The graph reads the `raw_two_days` and `charging_schedule` attributes of the status sensor, so it works with any supported price sensor.
 
 ## Charging the car
 

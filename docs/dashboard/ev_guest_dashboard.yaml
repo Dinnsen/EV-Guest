@@ -1,131 +1,391 @@
-type: vertical-stack
-cards:
-  - type: custom:bubble-card
-    card_type: separator
-    name: EV Guest
-    icon: mdi:car-electric
+# EV Guest – example dashboard (sections view)
+#
+# Requires these HACS frontend cards:
+#   - Bubble Card             https://github.com/Clooos/Bubble-Card
+#   - ApexCharts Card         https://github.com/RomRider/apexcharts-card
+#   - Vertical Stack In Card  https://github.com/ofekashery/vertical-stack-in-card
+#
+# Entity IDs assume an EV Guest entry named "EV Guest". If yours has another
+# name, replace "ev_guest_" with your prefix.
+#
+# Use it as a whole dashboard: Settings -> Dashboards -> Add dashboard ->
+# New dashboard from scratch, open it, then ⋮ -> Edit dashboard -> ⋮ ->
+# Raw configuration editor, and paste this file.
+# Or add only the view: copy everything under "views:" into an existing
+# dashboard's raw configuration.
 
+views:
+- type: sections
+  max_columns: 4
+  title: EV Guest
+  path: ev-guest
+  icon: mdi:ev-station
+  header:
+    card:
+      type: markdown
+      text_only: true
+      content: |
+        <img src="https://raw.githubusercontent.com/Dinnsen/EV-Guest/main/docs/assets/logo.png" width="120">
+
+        EV Guest for Home Assistant helps you find the cheapest charging window for guest EVs without connecting the car to Home Assistant.
+  badges:
+  - type: entity
+    show_name: true
+    show_state: true
+    show_icon: true
+    entity: binary_sensor.ev_guest_charge_now
+    name: Charge
+  - type: entity
+    show_name: true
+    show_state: true
+    show_icon: true
+    entity: sensor.ev_guest_status
+    name: Status
+  - type: entity
+    show_name: true
+    show_state: true
+    show_icon: true
+    entity: sensor.ev_guest_charge_costs
+    name: Costs
+  sections:
   - type: grid
-    columns: 2
-    square: false
     cards:
-      - type: custom:bubble-card
-        card_type: button
-        entity: text.ev_guest_license_plate
+    - type: custom:bubble-card
+      card_type: separator
+      name: License Plate
+      icon: mdi:card-account-details
+      sub_button:
+        main: []
+        bottom: []
+    - type: entities
+      entities:
+      - entity: text.ev_guest_license_plate
         name: License Plate
-        icon: mdi:card-text-outline
-        button_type: name
-      - type: custom:bubble-card
-        card_type: button
-        entity: button.ev_guest_grab_car_data
-        name: Grab Car Data
-        icon: mdi:car-search
-      - type: custom:bubble-card
-        card_type: button
-        entity: number.ev_guest_battery_capacity
-        name: Capacity
-        icon: mdi:car-electric
-      - type: custom:bubble-card
-        card_type: button
-        entity: number.ev_guest_soc_state_of_charge
-        name: SoC
-        icon: mdi:battery-50
-      - type: custom:bubble-card
-        card_type: button
-        entity: number.ev_guest_charge_limit
-        name: Limit
-        icon: mdi:battery-arrow-up
-      - type: custom:bubble-card
-        card_type: button
-        entity: time.ev_guest_charge_completion_time
-        name: Charge Completion Time
-        icon: mdi:clock-check-outline
-      - type: custom:bubble-card
-        card_type: button
-        entity: switch.ev_guest_use_charge_completion_time
-        name: Use Completion Time
-        icon: mdi:clock-check-outline
-      - type: custom:bubble-card
-        card_type: button
-        entity: switch.ev_guest_continuous_charging_preferred
-        name: Continuous Charging Preferred
-        icon: mdi:timeline-clock-outline
-      - type: custom:bubble-card
-        card_type: button
-        entity: button.ev_guest_calculate
-        name: Calculate
-        icon: mdi:calculator
-
+    - type: custom:bubble-card
+      card_type: sub-buttons
+      button_type: switch
+      sub_button:
+        main: []
+        bottom:
+        - entity: button.ev_guest_grab_car_data
+          name: Grab Car Data
+          show_name: true
+          show_state: false
+          force_icon: false
+          content_layout: icon-top
+          tap_action:
+            action: toggle
+      entity: sensor.ev_guest_car_battery_capacity
+      name: Battery Capacity
+      show_attribute: false
+      show_state: true
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: none
+      footer_mode: false
+      hide_main_background: true
+      card_layout: large
+      rows: '2'
+      grid_options:
+        rows: auto
+    - type: custom:bubble-card
+      card_type: separator
+      name: Car Data
+      icon: mdi:car-settings
+      sub_button:
+        main: []
+        bottom: []
+    - type: custom:bubble-card
+      card_type: button
+      button_type: switch
+      sub_button:
+        main: []
+        bottom: []
+      entity: sensor.ev_guest_car_battery_capacity
+      name: Battery Capacity
+      show_attribute: false
+      show_state: true
+      grid_options:
+        columns: 6
+        rows: auto
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: none
+    - type: custom:bubble-card
+      card_type: button
+      button_type: switch
+      sub_button:
+        main: []
+        bottom: []
+      entity: sensor.ev_guest_car_brand
+      name: Brand
+      show_attribute: false
+      show_state: true
+      grid_options:
+        columns: 6
+        rows: auto
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: none
+    - type: custom:bubble-card
+      card_type: button
+      button_type: switch
+      sub_button:
+        main: []
+        bottom: []
+      entity: sensor.ev_guest_car_model
+      name: Model
+      show_attribute: false
+      show_state: true
+      grid_options:
+        columns: 6
+        rows: auto
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: none
+    - type: custom:bubble-card
+      card_type: button
+      button_type: switch
+      sub_button:
+        main: []
+        bottom: []
+      entity: sensor.ev_guest_car_variant
+      name: Variant
+      show_attribute: false
+      show_state: true
+      grid_options:
+        columns: 6
+        rows: auto
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: none
   - type: grid
-    columns: 2
-    square: false
     cards:
-      - type: custom:bubble-card
-        card_type: button
-        entity: sensor.ev_guest_charging_speed
-        name: Charging Speed
-        show_state: true
-      - type: custom:bubble-card
-        card_type: button
-        entity: sensor.ev_guest_charge_costs
-        name: Charge Costs
-        show_state: true
-      - type: custom:bubble-card
-        card_type: button
-        entity: sensor.ev_guest_charge_start_time
-        name: Charge Start Time
-        show_state: true
-      - type: custom:bubble-card
-        card_type: button
-        entity: sensor.ev_guest_charge_end_time
-        name: Charge End Time
-        show_state: true
-      - type: custom:bubble-card
-        card_type: button
-        entity: sensor.ev_guest_charge_time
-        name: Charge Time
-        show_state: true
-      - type: custom:bubble-card
-        card_type: button
-        entity: sensor.ev_guest_status
-        name: Status
-        show_state: true
-
-  - type: custom:vertical-stack-in-card
+    - type: custom:bubble-card
+      card_type: separator
+      name: Controls
+      icon: mdi:car-cog
+      sub_button:
+        main: []
+        bottom: []
+    - type: custom:bubble-card
+      card_type: button
+      button_type: slider
+      sub_button:
+        main: []
+        bottom: []
+      entity: number.ev_guest_battery_capacity
+      name: Battery Capacity
+      show_attribute: false
+      show_state: true
+      grid_options:
+        columns: 12
+        rows: auto
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: more-info
+      max_value: 120
+      min_value: 0
+      step: 0.5
+      tap_to_slide: true
+    - type: custom:bubble-card
+      card_type: button
+      button_type: slider
+      sub_button:
+        main: []
+        bottom: []
+      entity: number.ev_guest_soc_state_of_charge
+      name: SoC (State of Charge)
+      show_attribute: false
+      show_state: true
+      grid_options:
+        columns: 12
+        rows: auto
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: more-info
+      max_value: 100
+      min_value: 0
+      step: 0.5
+      tap_to_slide: true
+    - type: custom:bubble-card
+      card_type: button
+      button_type: slider
+      sub_button:
+        main: []
+        bottom: []
+      entity: number.ev_guest_charge_limit
+      name: Charge Limit
+      show_attribute: false
+      show_state: true
+      grid_options:
+        columns: 12
+        rows: auto
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: more-info
+      max_value: 100
+      min_value: 0
+      step: 0.5
+      tap_to_slide: true
+    - type: custom:bubble-card
+      card_type: sub-buttons
+      button_type: switch
+      sub_button:
+        main: []
+        bottom:
+        - entity: button.ev_guest_calculate
+          name: Calculate
+          show_name: true
+          show_state: false
+          force_icon: false
+          content_layout: icon-top
+          tap_action:
+            action: toggle
+      entity: sensor.ev_guest_car_battery_capacity
+      name: Battery Capacity
+      show_attribute: false
+      show_state: true
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: none
+      footer_mode: false
+      hide_main_background: true
+      card_layout: large
+      rows: '2'
+      grid_options:
+        rows: auto
+    - type: custom:bubble-card
+      card_type: sub-buttons
+      button_type: switch
+      sub_button:
+        main: []
+        bottom:
+        - entity: switch.ev_guest_use_charge_completion_time
+          name: Completion Time
+          show_name: true
+          show_state: true
+          force_icon: false
+          content_layout: icon-top
+          tap_action:
+            action: toggle
+        - entity: switch.ev_guest_continuous_charging_preferred
+          name: Continuous Charging
+          show_name: true
+          show_state: true
+          force_icon: false
+          content_layout: icon-top
+          scrolling_effect: false
+          tap_action:
+            action: toggle
+      entity: sensor.ev_guest_car_battery_capacity
+      name: Battery Capacity
+      show_attribute: false
+      show_state: true
+      tap_action:
+        action: none
+      button_action:
+        tap_action:
+          action: none
+      footer_mode: false
+      hide_main_background: true
+      card_layout: large
+      rows: '2'
+      grid_options:
+        rows: auto
+    - type: entities
+      entities:
+      - entity: time.ev_guest_charge_completion_time
+        name: Charge Completion Time
+  - type: grid
     cards:
-      - type: markdown
-        content: |
-          ### <ha-icon icon="mdi:hours-24"></ha-icon>&nbsp;&nbsp;Planned charging
-      - type: custom:apexcharts-card
-        now:
-          show: true
-          label: Now
-        locale: en
-        header:
-          show: false
-        graph_span: 2d
-        span:
-          start: day
-        yaxis:
-          - min: ~0
-            max: 1.2
-        apex_config:
-          legend:
+    - type: vertical-stack
+      cards:
+      - type: custom:bubble-card
+        card_type: separator
+        name: Charging Plan
+        icon: mdi:car-electric
+        sub_button:
+          main: []
+          bottom: []
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+        - type: custom:bubble-card
+          card_type: button
+          entity: sensor.ev_guest_charging_speed
+          name: Charging Speed
+          show_state: true
+        - type: custom:bubble-card
+          card_type: button
+          entity: sensor.ev_guest_charge_time
+          name: Charge Time
+          show_state: true
+        - type: custom:bubble-card
+          card_type: button
+          entity: sensor.ev_guest_charge_start_time
+          name: Charge Start Time
+          show_state: true
+        - type: custom:bubble-card
+          card_type: button
+          entity: sensor.ev_guest_charge_end_time
+          name: Charge End Time
+          show_state: true
+      - type: custom:vertical-stack-in-card
+        cards:
+        - type: markdown
+          content: |
+            ### <ha-icon icon="mdi:hours-24"></ha-icon>&nbsp;&nbsp;Planned charging
+        - type: custom:apexcharts-card
+          now:
+            show: true
+            label: Now
+          locale: en
+          header:
             show: false
-          chart:
-            height: 245px
-          xaxis:
-            labels:
-              show: true
-              format: HH
-              rotate: -45
-              rotateAlways: true
-              hideOverlappingLabels: true
-              style:
-                fontSize: 10
-          dataLabels:
-            enabled: false
-        series:
+          graph_span: 2d
+          span:
+            start: day
+          yaxis:
+          - min: ~0
+            apex_config:
+              forceNiceScale: true
+          apex_config:
+            legend:
+              show: false
+            chart:
+              height: 245px
+            xaxis:
+              labels:
+                show: true
+                format: HH
+                rotate: -45
+                rotateAlways: true
+                hideOverlappingLabels: true
+                style:
+                  fontSize: 10
+            dataLabels:
+              enabled: false
+          series:
           - entity: sensor.ev_guest_status
             name: Electricity price
             type: line
@@ -147,3 +407,16 @@ cards:
                 new Date(entry.start).getTime(),
                 parseFloat(entry.value)
               ]);
+  - type: grid
+    cards:
+    - type: custom:bubble-card
+      card_type: separator
+      name: Charger
+      icon: mdi:ev-station
+      sub_button:
+        main: []
+        bottom: []
+    - type: entities
+      entities:
+      - entity: number.ev_guest_charger_power
+        name: Charger Power
