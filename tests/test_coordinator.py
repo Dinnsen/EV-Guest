@@ -269,6 +269,7 @@ async def test_price_update_recalculates_plan_that_has_not_started(
 
     coordinator._handle_price_update(MagicMock())
     coordinator.hass.async_create_task.assert_called_once()
+    coordinator.hass.async_create_task.call_args.args[0].close()
 
 
 def test_price_update_is_ignored_before_first_manual_calculation(
