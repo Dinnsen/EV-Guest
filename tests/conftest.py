@@ -33,8 +33,24 @@ def patch_data_update_coordinator_init(monkeypatch):
         self.config_entry = config_entry
         self.data = None
         self.last_update_success = True
+        self._listeners = {}
 
     monkeypatch.setattr(DataUpdateCoordinator, "__init__", _fake_init)
+
+
+@pytest.fixture(autouse=True)
+def patch_storage_and_timers(monkeypatch):
+    """Keep coordinator tests free of disk storage and real HA timers."""
+    import custom_components.ev_guest.coordinator as coordinator_module
+
+    store = MagicMock()
+    store.async_load = AsyncMock(return_value=None)
+    store.async_remove = AsyncMock()
+    monkeypatch.setattr(coordinator_module, "Store", MagicMock(return_value=store))
+    monkeypatch.setattr(
+        coordinator_module, "async_track_point_in_time", MagicMock(return_value=MagicMock())
+    )
+    return store
 
 
 @pytest.fixture
@@ -49,8 +65,6 @@ def mock_config_entry() -> SimpleNamespace:
             "time_format": "24h",
             "duration_format": "minutes",
             "motorapi_api_key": "test-key",
-            "charger_switch_entity": "switch.test_charger",
-            "charger_status_entity": "binary_sensor.test_charger_status",
             "country": "Denmark",
             "plate_provider": "motorapi_dk",
         },

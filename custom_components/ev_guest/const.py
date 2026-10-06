@@ -8,7 +8,7 @@ DOMAIN = "ev_guest"
 DEFAULT_NAME = "EV Guest"
 PLATFORMS = ["sensor", "button", "number", "text", "switch", "binary_sensor"]
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=30)
-USER_AGENT = "EVGuestHomeAssistant/0.6.0 (+https://github.com/Dinnsen/EV-Guest)"
+USER_AGENT = "EVGuestHomeAssistant/0.7.0 (+https://github.com/Dinnsen/EV-Guest)"
 
 MOTORAPI_BASE_URL = "https://v1.motorapi.dk"
 NHTSA_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/{vin}?format=json"
@@ -20,16 +20,10 @@ CONF_CURRENCY = "currency"
 CONF_TIME_FORMAT = "time_format"
 CONF_DURATION_FORMAT = "duration_format"
 CONF_MOTORAPI_KEY = "motorapi_api_key"
-CONF_CHARGER_SWITCH_ENTITY = "charger_switch_entity"
-CONF_CHARGER_STATUS_ENTITY = "charger_status_entity"
-CONF_LANGUAGE = "language"
 CONF_COUNTRY = "country"
 CONF_PLATE_PROVIDER = "plate_provider"
 
-LANGUAGE_ENGLISH = "English"
-LANGUAGE_DANISH = "Dansk"
 COUNTRY_DENMARK = "Denmark"
-DEFAULT_LANGUAGE = LANGUAGE_ENGLISH
 DEFAULT_COUNTRY = COUNTRY_DENMARK
 DEFAULT_PLATE_PROVIDER = "motorapi_dk"
 
@@ -41,7 +35,6 @@ DURATION_FORMAT_HM = "hours_minutes"
 CURRENCIES = ["DKK", "EUR", "USD"]
 TIME_FORMATS = [TIME_FORMAT_24H, TIME_FORMAT_12H]
 DURATION_FORMATS = [DURATION_FORMAT_MINUTES, DURATION_FORMAT_HM]
-LANGUAGES = [LANGUAGE_ENGLISH, LANGUAGE_DANISH]
 COUNTRIES = [COUNTRY_DENMARK]
 
 INPUT_LICENSE_PLATE = "license_plate"
@@ -51,7 +44,6 @@ INPUT_CHARGER_POWER = "charger_power"
 INPUT_CHARGE_LIMIT = "charge_limit"
 INPUT_CHARGE_COMPLETION_TIME = "charge_completion_time"
 INPUT_USE_COMPLETION_TIME = "use_completion_time"
-INPUT_ENABLE_CHARGER_CONTROL = "enable_charger_control"
 INPUT_CONTINUOUS_CHARGING_PREFERRED = "continuous_charging_preferred"
 
 RESULT_CHARGING_SPEED = "charging_speed"
@@ -77,13 +69,16 @@ ATTR_MATCH_SCORE = "match_score"
 ATTR_CHARGING_SCHEDULE = "charging_schedule"
 ATTR_RAW_TWO_DAYS = "raw_two_days"
 ATTR_PLAN_MODE = "plan_mode"
-ATTR_CHARGER_CONTROL_ENABLED = "charger_control_enabled"
-ATTR_CHARGER_ENTITY = "charger_entity"
-ATTR_CHARGER_STATUS_ENTITY = "charger_status_entity"
-ATTR_CHARGER_IS_ON = "charger_is_on"
-ATTR_LANGUAGE = "language"
+ATTR_CHARGING_SEGMENTS = "charging_segments"
+ATTR_PLAN_LOCKED = "plan_locked"
 ATTR_COUNTRY = "country"
 ATTR_PLATE_PROVIDER = "plate_provider"
+
+STORAGE_VERSION = 1
+STORAGE_KEY = f"{DOMAIN}.{{entry_id}}"
+
+# Entity removed in 0.7.0 (charger control); cleaned from the entity registry on setup.
+LEGACY_ENABLE_CHARGER_CONTROL_KEY = "enable_charger_control"
 
 DATASET_CACHE_KEY = f"{DOMAIN}_open_ev_data_cache"
 

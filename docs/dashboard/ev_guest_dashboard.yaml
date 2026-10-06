@@ -47,11 +47,6 @@ cards:
         icon: mdi:clock-check-outline
       - type: custom:bubble-card
         card_type: button
-        entity: switch.ev_guest_enable_charger_control
-        name: Charger Control
-        icon: mdi:ev-station
-      - type: custom:bubble-card
-        card_type: button
         entity: switch.ev_guest_continuous_charging_preferred
         name: Continuous Charging Preferred
         icon: mdi:timeline-clock-outline

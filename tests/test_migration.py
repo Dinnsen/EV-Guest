@@ -18,7 +18,7 @@ async def test_migrate_old_entry(mock_hass, mock_config_entry):
     mock_hass.config_entries.async_update_entry.assert_called_once()
     _entry, kwargs = mock_hass.config_entries.async_update_entry.call_args
     assert kwargs["version"] == 7
-    assert kwargs["data"]["charger_switch_entity"] == ""
-    assert kwargs["data"]["charger_status_entity"] == "binary_sensor.test_charger_status"
+    # Legacy charger keys are left untouched so a rollback to 0.6.x keeps working.
+    assert kwargs["data"]["charger_switch_entity"] == "switch.ev_guest_dummy_test_charger"
     assert "language" not in kwargs["data"]
     assert kwargs["data"]["country"] == "Denmark"

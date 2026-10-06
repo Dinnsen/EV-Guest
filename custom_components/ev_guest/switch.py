@@ -7,11 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    INPUT_CONTINUOUS_CHARGING_PREFERRED,
-    INPUT_ENABLE_CHARGER_CONTROL,
-    INPUT_USE_COMPLETION_TIME,
-)
+from .const import INPUT_CONTINUOUS_CHARGING_PREFERRED, INPUT_USE_COMPLETION_TIME
 from .entity import EVGuestCoordinatorEntity
 
 PARALLEL_UPDATES = 0
@@ -24,7 +20,6 @@ async def async_setup_entry(
     async_add_entities(
         [
             EVGuestUseCompletionTimeSwitch(coordinator),
-            EVGuestEnableChargerControlSwitch(coordinator),
             EVGuestContinuousChargingPreferredSwitch(coordinator),
         ]
     )
@@ -53,17 +48,6 @@ class EVGuestUseCompletionTimeSwitch(_BaseInputSwitch):
 
     def __init__(self, coordinator) -> None:
         super().__init__(coordinator, INPUT_USE_COMPLETION_TIME)
-
-
-class EVGuestEnableChargerControlSwitch(_BaseInputSwitch):
-    """Toggle charger control on or off."""
-
-    _attr_name = "Enable Charger Control"
-    _attr_icon = "mdi:ev-station"
-    _default = False
-
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator, INPUT_ENABLE_CHARGER_CONTROL)
 
 
 class EVGuestContinuousChargingPreferredSwitch(_BaseInputSwitch):

@@ -9,10 +9,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.storage import Store
 
 from .const import (
-    CONF_CHARGER_STATUS_ENTITY,
-    CONF_CHARGER_SWITCH_ENTITY,
     CONF_COUNTRY,
     CONF_CURRENCY,
     CONF_DURATION_FORMAT,
@@ -23,9 +23,12 @@ from .const import (
     DEFAULT_COUNTRY,
     DEFAULT_PLATE_PROVIDER,
     DOMAIN,
+    LEGACY_ENABLE_CHARGER_CONTROL_KEY,
     PLATFORMS,
     SERVICE_CALCULATE,
     SERVICE_GRAB_CAR_DATA,
+    STORAGE_KEY,
+    STORAGE_VERSION,
 )
 from .coordinator import EVGuestCoordinator
 
@@ -43,20 +46,6 @@ def _normalize_country(value: str | None) -> str:
         return "Denmark"
 
     return DEFAULT_COUNTRY
-
-
-def _normalize_optional_entity(value: str | None) -> str:
-    if not value:
-        return ""
-
-    entity_id = str(value).strip()
-    if not entity_id or entity_id.lower() == "none":
-        return ""
-
-    if "ev_guest_dummy" in entity_id:
-        return ""
-
-    return entity_id
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -78,6 +67,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    _remove_legacy_entities(hass, entry)
     coordinator = EVGuestCoordinator(hass, entry)
     await coordinator.async_initialize()
     entry.runtime_data = coordinator
@@ -95,6 +85,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     _LOGGER.debug("Removing EV Guest entry %s", entry.entry_id)
+    store = Store(hass, STORAGE_VERSION, STORAGE_KEY.format(entry_id=entry.entry_id))
+    await store.async_remove()
+
+
+def _remove_legacy_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove entities that no longer exist since 0.7.0 (charger control)."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "switch", DOMAIN, f"{entry.entry_id}_{LEGACY_ENABLE_CHARGER_CONTROL_KEY}"
+    )
+    if entity_id:
+        registry.async_remove(entity_id)
+        _LOGGER.info("Removed legacy entity %s (charger control was removed in 0.7.0)", entity_id)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -113,24 +116,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     new_data.setdefault(CONF_MOTORAPI_KEY, "")
     new_data.setdefault(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER)
     new_data[CONF_COUNTRY] = _normalize_country(new_data.get(CONF_COUNTRY))
-    new_data[CONF_CHARGER_SWITCH_ENTITY] = _normalize_optional_entity(
-        new_data.get(CONF_CHARGER_SWITCH_ENTITY)
-    )
-    new_data[CONF_CHARGER_STATUS_ENTITY] = _normalize_optional_entity(
-        new_data.get(CONF_CHARGER_STATUS_ENTITY)
-    )
+    # Charger keys from <= 0.6.x are left untouched (ignored) so a rollback
+    # to 0.6.x still finds its configuration.
     new_data.pop("language", None)
 
     if CONF_COUNTRY in new_options:
         new_options[CONF_COUNTRY] = _normalize_country(new_options.get(CONF_COUNTRY))
-    if CONF_CHARGER_SWITCH_ENTITY in new_options:
-        new_options[CONF_CHARGER_SWITCH_ENTITY] = _normalize_optional_entity(
-            new_options.get(CONF_CHARGER_SWITCH_ENTITY)
-        )
-    if CONF_CHARGER_STATUS_ENTITY in new_options:
-        new_options[CONF_CHARGER_STATUS_ENTITY] = _normalize_optional_entity(
-            new_options.get(CONF_CHARGER_STATUS_ENTITY)
-        )
     new_options.pop("language", None)
 
     changed = (

@@ -14,7 +14,6 @@ from custom_components.ev_guest.const import (
     INPUT_CHARGE_LIMIT,
     INPUT_CHARGER_POWER,
     INPUT_CONTINUOUS_CHARGING_PREFERRED,
-    INPUT_ENABLE_CHARGER_CONTROL,
     INPUT_SOC,
     INPUT_USE_COMPLETION_TIME,
     RESULT_CHARGE_COSTS,
@@ -164,7 +163,6 @@ def test_calculate_schedule_can_split_when_continuous_is_off(
             INPUT_CHARGE_COMPLETION_TIME: "07:00",
             INPUT_USE_COMPLETION_TIME: True,
             INPUT_CONTINUOUS_CHARGING_PREFERRED: False,
-            INPUT_ENABLE_CHARGER_CONTROL: False,
         }
     )
     coordinator.hass.states.get.return_value = MagicMock(
@@ -184,27 +182,145 @@ def test_calculate_schedule_can_split_when_continuous_is_off(
 
     result = coordinator._calculate_schedule()
 
-    assert result[RESULT_CHARGE_COSTS] == pytest.approx(24.86, rel=1e-2)
+    # 4.2 h needed: full hours at 0.10, 0.20, 0.30 and 1.30, the remaining
+    # 0.2 h at 1.40 (the most expensive chosen hour), at 11 kWh/h.
+    assert result[RESULT_CHARGE_COSTS] == pytest.approx(23.98, rel=1e-3)
     assert coordinator.data.results["plan_mode"] == "split"
+    segments = [(seg["start"].strftime("%H:%M"), seg["end"].strftime("%H:%M")) for seg in result["plan_segments"]]
+    # The partial hour sits at the end of 00:00 so it joins the 01:00-03:00 block.
+    assert segments == [("21:00", "22:00"), ("23:00", "00:00"), ("00:48", "03:00")]
 
 
-def test_charge_now_is_true_inside_active_schedule(
+def test_charge_now_follows_exact_segment_end_not_whole_hours(
     coordinator: EVGuestCoordinator, fixed_now
 ) -> None:
-    coordinator.data.results["charging_schedule"] = [
-        {"start": "2026-04-09T19:00:00+02:00", "value": 0},
-        {"start": "2026-04-09T20:00:00+02:00", "value": 1},
-        {"start": "2026-04-09T21:00:00+02:00", "value": 0},
-    ]
+    coordinator._set_plan(
+        [{"start": fixed_now - timedelta(hours=1), "end": fixed_now + timedelta(minutes=20)}]
+    )
 
     assert coordinator.is_charge_now() is True
+    assert coordinator.is_charge_now(fixed_now + timedelta(minutes=19)) is True
+    # 0.6.x stayed on until the end of the hour (21:00); now it stops at 20:20.
+    assert coordinator.is_charge_now(fixed_now + timedelta(minutes=20)) is False
+    assert coordinator.is_charge_now(fixed_now + timedelta(minutes=50)) is False
 
 
-def test_read_charger_status_prefers_configured_status_entity(
+def _price_state(fixed_now, prices):
+    return MagicMock(
+        state="1.00",
+        attributes={
+            "forecast": [
+                {"hour": (fixed_now + timedelta(hours=offset)).isoformat(), "price": price}
+                for offset, price in enumerate(prices)
+            ]
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_price_update_does_not_recalculate_a_started_plan(
+    coordinator: EVGuestCoordinator, fixed_now
+) -> None:
+    coordinator.data.inputs.update(
+        {
+            INPUT_SOC: 50,
+            INPUT_BATTERY_CAPACITY: 10,
+            INPUT_CHARGER_POWER: 5,
+            INPUT_CHARGE_LIMIT: 100,
+            INPUT_USE_COMPLETION_TIME: False,
+        }
+    )
+    coordinator.hass.states.get.return_value = _price_state(fixed_now, [0.1, 1.0, 1.0, 1.0])
+
+    await coordinator.async_calculate()
+    assert coordinator.is_plan_locked() is True  # plan starts 20:00 == now
+    first_segments = list(coordinator._plan_segments)
+
+    # Cheaper prices appear later, but the SoC is static: replanning would
+    # charge the same energy a second time.
+    coordinator.hass.states.get.return_value = _price_state(fixed_now, [9.0, 0.01, 0.01, 0.01])
+    coordinator._handle_price_update(MagicMock())
+    coordinator.hass.async_create_task.assert_not_called()
+    await coordinator.async_calculate(manual=False)
+    assert coordinator._plan_segments == first_segments
+
+    # Pressing Calculate is always allowed and makes a new plan.
+    await coordinator.async_calculate()
+    assert coordinator._plan_segments != first_segments
+
+
+@pytest.mark.asyncio
+async def test_price_update_recalculates_plan_that_has_not_started(
+    coordinator: EVGuestCoordinator, fixed_now
+) -> None:
+    coordinator.data.inputs.update(
+        {
+            INPUT_SOC: 50,
+            INPUT_BATTERY_CAPACITY: 10,
+            INPUT_CHARGER_POWER: 5,
+            INPUT_CHARGE_LIMIT: 100,
+            INPUT_USE_COMPLETION_TIME: False,
+        }
+    )
+    coordinator.hass.states.get.return_value = _price_state(fixed_now, [1.0, 1.0, 0.1, 1.0])
+
+    await coordinator.async_calculate()
+    assert coordinator.is_plan_locked() is False
+
+    coordinator._handle_price_update(MagicMock())
+    coordinator.hass.async_create_task.assert_called_once()
+    coordinator.hass.async_create_task.call_args.args[0].close()
+
+
+def test_price_update_is_ignored_before_first_manual_calculation(
     coordinator: EVGuestCoordinator,
 ) -> None:
-    coordinator.hass.states.get.return_value = MagicMock(state="on")
-    assert coordinator._read_charger_status() is True
+    coordinator._handle_price_update(MagicMock())
+    coordinator.hass.async_create_task.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_failed_manual_calculation_clears_old_plan(
+    coordinator: EVGuestCoordinator, fixed_now
+) -> None:
+    coordinator._set_plan([{"start": fixed_now, "end": fixed_now + timedelta(hours=1)}])
+    coordinator.data.inputs.update({INPUT_SOC: 80, INPUT_CHARGE_LIMIT: 80})
+
+    await coordinator.async_calculate()
+
+    assert coordinator.is_charge_now() is False
+    assert coordinator.data.results["status"] == "Charge limit must be above current SoC"
+
+
+@pytest.mark.asyncio
+async def test_state_round_trips_through_storage(
+    coordinator: EVGuestCoordinator, fixed_now, patch_storage_and_timers
+) -> None:
+    coordinator.data.inputs[INPUT_SOC] = 42
+    coordinator._auto_recalculate = True
+    coordinator._set_plan([{"start": fixed_now, "end": fixed_now + timedelta(minutes=95)}])
+    stored = coordinator._data_to_store()
+
+    restored = EVGuestCoordinator(coordinator.hass, coordinator.config_entry)
+    patch_storage_and_timers.async_load.return_value = stored
+    await restored._async_load_state()
+
+    assert restored.data.inputs[INPUT_SOC] == 42
+    assert restored._auto_recalculate is True
+    assert restored.is_charge_now(fixed_now + timedelta(minutes=94)) is True
+    assert restored.is_charge_now(fixed_now + timedelta(minutes=95)) is False
+
+
+@pytest.mark.asyncio
+async def test_lookup_without_motorapi_key_keeps_calculator_usable(
+    coordinator: EVGuestCoordinator,
+) -> None:
+    coordinator.config_entry.data["motorapi_api_key"] = ""
+    coordinator.data.inputs["license_plate"] = "AB12345"
+
+    await coordinator.async_lookup_car_data()
+
+    assert "MotorAPI API key not configured" in coordinator.data.results["status"]
 
 
 def test_calculate_schedule_without_completion_time_uses_visible_two_day_horizon(
@@ -218,7 +334,6 @@ def test_calculate_schedule_without_completion_time_uses_visible_two_day_horizon
             INPUT_CHARGE_LIMIT: 10,
             INPUT_USE_COMPLETION_TIME: False,
             INPUT_CONTINUOUS_CHARGING_PREFERRED: False,
-            INPUT_ENABLE_CHARGER_CONTROL: False,
         }
     )
 

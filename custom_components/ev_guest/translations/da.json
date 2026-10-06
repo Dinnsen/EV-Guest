@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "EV Guest",
-        "description": "Opsæt EV Guest.",
+        "description": "Opsæt EV Guest. MotorAPI-nøglen er kun nødvendig for opslag på nummerplade.",
         "data": {
           "name": "Navn",
           "price_entity": "Elprissensor",
@@ -11,9 +11,7 @@
           "time_format": "Tidsformat",
           "duration_format": "Format for ladetid",
           "country": "Land",
-          "motorapi_api_key": "MotorAPI API-nøgle",
-          "charger_switch_entity": "Lader-switch entity (valgfri)",
-          "charger_status_entity": "Lader-status entity (valgfri)"
+          "motorapi_api_key": "MotorAPI API-nøgle (valgfri)"
         }
       },
       "reauth_confirm": {
@@ -44,9 +42,7 @@
           "time_format": "Tidsformat",
           "duration_format": "Format for ladetid",
           "country": "Land",
-          "motorapi_api_key": "MotorAPI API-nøgle",
-          "charger_switch_entity": "Lader-switch entity (valgfri)",
-          "charger_status_entity": "Lader-status entity (valgfri)"
+          "motorapi_api_key": "MotorAPI API-nøgle (valgfri)"
         }
       }
     }
@@ -122,9 +118,6 @@
     "switch": {
       "use_completion_time": {
         "name": "Brug færdig ladet kl."
-      },
-      "enable_charger_control": {
-        "name": "Aktivér laderstyring"
       },
       "continuous_charging_preferred": {
         "name": "Foretræk kontinuerlig opladning"

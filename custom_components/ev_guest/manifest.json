@@ -12,5 +12,5 @@
   "loggers": [
     "custom_components.ev_guest"
   ],
-  "version": "0.6.5"
+  "version": "0.7.0"
 }
