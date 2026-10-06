@@ -2,40 +2,31 @@
 
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorEntityDescription
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DIAGNOSTIC_CHARGE_NOW
-from .entity import EVGuestCoordinatorEntity
+from .coordinator import EVGuestConfigEntry, EVGuestCoordinator
+from .entity import EVGuestEntity
 
 PARALLEL_UPDATES = 0
 
-BINARY_SENSORS: tuple[BinarySensorEntityDescription, ...] = (
-    BinarySensorEntityDescription(
-        key=DIAGNOSTIC_CHARGE_NOW,
-        icon="mdi:lightning-bolt-circle",
-    ),
-)
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: EVGuestConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    async_add_entities([EVGuestChargeNowBinarySensor(entry.runtime_data)])
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator = entry.runtime_data
-    async_add_entities(EVGuestBinarySensor(coordinator, description) for description in BINARY_SENSORS)
+class EVGuestChargeNowBinarySensor(EVGuestEntity, BinarySensorEntity):
+    """On exactly while the current time is inside a planned charging segment."""
 
-
-class EVGuestBinarySensor(EVGuestCoordinatorEntity, BinarySensorEntity):
-    """EV Guest binary sensor."""
-
-    entity_description: BinarySensorEntityDescription
-
-    def __init__(self, coordinator, description: BinarySensorEntityDescription) -> None:
-        super().__init__(coordinator, description.key)
-        self.entity_description = description
+    def __init__(self, coordinator: EVGuestCoordinator) -> None:
+        super().__init__(coordinator, DIAGNOSTIC_CHARGE_NOW)
 
     @property
-    def is_on(self) -> bool | None:
-        if self.entity_description.key == DIAGNOSTIC_CHARGE_NOW:
-            return self.coordinator.is_charge_now()
-        return None
+    def is_on(self) -> bool:
+        return self.coordinator.is_charge_now()

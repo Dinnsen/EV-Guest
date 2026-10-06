@@ -3,46 +3,70 @@
     "step": {
       "user": {
         "title": "EV Guest",
-        "description": "Opsæt EV Guest. MotorAPI-nøglen er kun nødvendig for opslag på nummerplade.",
+        "description": "Opsæt EV Guest til at finde det billigste ladevindue for gæstebiler. MotorAPI-nøglen er kun nødvendig for opslag på nummerplade.",
         "data": {
           "name": "Navn",
           "price_entity": "Elprissensor",
-          "currency": "Valuta for ladeomkostning",
-          "time_format": "Tidsformat",
-          "duration_format": "Format for ladetid",
           "country": "Land",
-          "motorapi_api_key": "MotorAPI API-nøgle (valgfri)"
+          "motorapi_api_key": "MotorAPI API-nøgle",
+          "currency": "Valuta"
+        },
+        "data_description": {
+          "name": "Vises som enhedens navn, fx EV Guest.",
+          "price_entity": "En sensor med timepriser for i dag og i morgen, fx Energi Data Service eller Nord Pool.",
+          "country": "Land der bruges til opslag på nummerplade.",
+          "motorapi_api_key": "Valgfri. Hent en gratis nøgle på motorapi.dk. Uden nøgle indtaster du batterikapaciteten selv.",
+          "currency": "Valutaen for elpriserne, bruges til ladeomkostningen."
+        }
+      },
+      "reconfigure": {
+        "title": "Omkonfigurer EV Guest",
+        "description": "Skift prissensor, land eller MotorAPI-nøgle.",
+        "data": {
+          "price_entity": "Elprissensor",
+          "country": "Land",
+          "motorapi_api_key": "MotorAPI API-nøgle"
+        },
+        "data_description": {
+          "price_entity": "En sensor med timepriser for i dag og i morgen, fx Energi Data Service eller Nord Pool.",
+          "country": "Land der bruges til opslag på nummerplade.",
+          "motorapi_api_key": "Valgfri. Hent en gratis nøgle på motorapi.dk. Uden nøgle indtaster du batterikapaciteten selv."
         }
       },
       "reauth_confirm": {
-        "title": "Genforbind MotorAPI",
-        "description": "Opdater MotorAPI API-nøglen."
+        "title": "Opdater MotorAPI-nøgle",
+        "description": "MotorAPI-nøglen til {name} blev afvist. Indtast en ny nøgle.",
+        "data": {
+          "motorapi_api_key": "MotorAPI API-nøgle"
+        },
+        "data_description": {
+          "motorapi_api_key": "Valgfri. Hent en gratis nøgle på motorapi.dk. Uden nøgle indtaster du batterikapaciteten selv."
+        }
       }
     },
     "error": {
-      "invalid_auth": "Ugyldig API-nøgle",
-      "cannot_connect": "Kan ikke forbinde til tjenesten",
-      "timeout": "Forespørgslen fik timeout",
-      "vehicle_not_found": "Køretøjet blev ikke fundet",
-      "missing_api_key": "API-nøgle er påkrævet",
-      "unsupported_provider": "Det valgte land/provider understøttes ikke endnu"
+      "invalid_price_entity": "Sensoren har ingen timepriser, som EV Guest kan læse.",
+      "invalid_auth": "Ugyldig API-nøgle.",
+      "cannot_connect": "Kan ikke forbinde til MotorAPI.",
+      "timeout": "MotorAPI svarede ikke i tide.",
+      "unsupported_provider": "Det valgte land understøttes ikke endnu.",
+      "unknown": "Uventet fejl."
     },
     "abort": {
-      "reauth_successful": "Genforbindelse lykkedes"
+      "already_configured": "Der findes allerede en EV Guest med dette navn.",
+      "reauth_successful": "MotorAPI-nøglen blev opdateret.",
+      "reconfigure_successful": "EV Guest blev omkonfigureret."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "EV Guest indstillinger",
-        "description": "Lad MotorAPI API-nøglen stå tom for at beholde den nuværende.",
+        "title": "EV Guest-indstillinger",
         "data": {
-          "price_entity": "Elprissensor",
-          "currency": "Valuta for ladeomkostning",
-          "time_format": "Tidsformat",
-          "duration_format": "Format for ladetid",
-          "country": "Land",
-          "motorapi_api_key": "MotorAPI API-nøgle (valgfri)"
+          "currency": "Valuta"
+        },
+        "data_description": {
+          "currency": "Valutaen for elpriserne, bruges til ladeomkostningen."
         }
       }
     }
@@ -104,15 +128,34 @@
         "name": "Bilens batterikapacitet"
       },
       "status": {
-        "name": "Status"
-      }
-    },
-    "text": {
-      "license_plate": {
-        "name": "Nummerplade"
-      },
-      "charge_completion_time": {
-        "name": "Færdig ladet kl."
+        "name": "Status",
+        "state": {
+          "ready": "Klar",
+          "planned": "Planlagt",
+          "charging": "Lader",
+          "completed": "Færdig",
+          "invalid_input": "Ugyldige værdier",
+          "limit_not_above_soc": "Ladegrænse ikke over SoC",
+          "no_price_data": "Ingen prisdata",
+          "not_enough_prices": "Venter på priser",
+          "no_window": "Intet ladevindue"
+        },
+        "state_attributes": {
+          "plan_mode": {
+            "name": "Planform",
+            "state": {
+              "continuous": "Sammenhængende",
+              "split": "Opdelt"
+            }
+          },
+          "plan_locked": {
+            "name": "Plan låst",
+            "state": {
+              "true": "Ja",
+              "false": "Nej"
+            }
+          }
+        }
       }
     },
     "switch": {
@@ -120,8 +163,81 @@
         "name": "Brug færdig ladet kl."
       },
       "continuous_charging_preferred": {
-        "name": "Foretræk kontinuerlig opladning"
+        "name": "Foretræk sammenhængende opladning"
       }
+    },
+    "text": {
+      "license_plate": {
+        "name": "Nummerplade"
+      }
+    },
+    "time": {
+      "charge_completion_time": {
+        "name": "Færdig ladet kl."
+      }
+    }
+  },
+  "services": {
+    "grab_car_data": {
+      "name": "Hent bildata",
+      "description": "Slår gæstebilen op ud fra nummerpladen og udfylder batterikapaciteten.",
+      "fields": {
+        "config_entry_id": {
+          "name": "EV Guest",
+          "description": "Den EV Guest der skal bruges. Kan udelades, når der kun er én."
+        }
+      }
+    },
+    "calculate": {
+      "name": "Beregn",
+      "description": "Beregner den billigste ladeplan ud fra de aktuelle værdier.",
+      "fields": {
+        "config_entry_id": {
+          "name": "EV Guest",
+          "description": "Den EV Guest der skal bruges. Kan udelades, når der kun er én."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_api_key": {
+      "message": "MotorAPI-nøglen blev afvist."
+    },
+    "unsupported_provider": {
+      "message": "Det valgte land understøttes ikke til opslag på nummerplade."
+    },
+    "license_plate_required": {
+      "message": "Indtast først en nummerplade."
+    },
+    "motorapi_key_missing": {
+      "message": "Opslag på nummerplade kræver en MotorAPI-nøgle. Tilføj den under Omkonfigurer, eller indtast batterikapaciteten selv."
+    },
+    "vehicle_not_found": {
+      "message": "Der blev ikke fundet en bil med denne nummerplade."
+    },
+    "lookup_failed": {
+      "message": "Opslaget af bilen fejlede ({detail}). Prøv igen senere."
+    },
+    "invalid_input": {
+      "message": "Batterikapacitet og ladeeffekt skal være over 0, og SoC og ladegrænse mellem 0 og 100."
+    },
+    "limit_not_above_soc": {
+      "message": "Ladegrænsen skal være over den aktuelle SoC."
+    },
+    "no_price_data": {
+      "message": "Prissensoren har ingen brugbare prisdata."
+    },
+    "not_enough_prices": {
+      "message": "Der er endnu ikke nok kendte priser før færdigtiden. EV Guest beregner igen, når nye priser kommer."
+    },
+    "no_window": {
+      "message": "Intet ladevindue passer før færdigtiden."
+    }
+  },
+  "issues": {
+    "price_entity_missing": {
+      "title": "Prissensoren til EV Guest mangler",
+      "description": "{title} bruger prissensoren `{entity_id}`, som ikke findes. Vælg en anden sensor under Omkonfigurer på EV Guest-integrationen."
     }
   }
 }

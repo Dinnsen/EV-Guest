@@ -3,46 +3,70 @@
     "step": {
       "user": {
         "title": "EV Guest",
-        "description": "Set up EV Guest. The MotorAPI key is only needed for license plate lookup.",
+        "description": "Set up EV Guest to find the cheapest charging window for guest cars. The MotorAPI key is only needed for license plate lookup.",
         "data": {
           "name": "Name",
           "price_entity": "Electricity price sensor",
-          "currency": "Charge costs currency",
-          "time_format": "Clock format",
-          "duration_format": "Charge time format",
           "country": "Country",
-          "motorapi_api_key": "MotorAPI API key (optional)"
+          "motorapi_api_key": "MotorAPI API key",
+          "currency": "Currency"
+        },
+        "data_description": {
+          "name": "Shown as the device name, for example EV Guest.",
+          "price_entity": "A sensor with hourly prices for today and tomorrow, such as Energi Data Service or Nord Pool.",
+          "country": "Country used for license plate lookup.",
+          "motorapi_api_key": "Optional. Get a free key at motorapi.dk. Without a key, enter battery capacity manually.",
+          "currency": "Currency of the electricity prices, used for the charge cost."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure EV Guest",
+        "description": "Change the price sensor, country or MotorAPI key.",
+        "data": {
+          "price_entity": "Electricity price sensor",
+          "country": "Country",
+          "motorapi_api_key": "MotorAPI API key"
+        },
+        "data_description": {
+          "price_entity": "A sensor with hourly prices for today and tomorrow, such as Energi Data Service or Nord Pool.",
+          "country": "Country used for license plate lookup.",
+          "motorapi_api_key": "Optional. Get a free key at motorapi.dk. Without a key, enter battery capacity manually."
         }
       },
       "reauth_confirm": {
-        "title": "Reconnect MotorAPI",
-        "description": "Update the MotorAPI API key."
+        "title": "Update MotorAPI key",
+        "description": "The MotorAPI key for {name} was rejected. Enter a new key.",
+        "data": {
+          "motorapi_api_key": "MotorAPI API key"
+        },
+        "data_description": {
+          "motorapi_api_key": "Optional. Get a free key at motorapi.dk. Without a key, enter battery capacity manually."
+        }
       }
     },
     "error": {
-      "invalid_auth": "Invalid API key",
-      "cannot_connect": "Cannot connect to the service",
-      "timeout": "The request timed out",
-      "vehicle_not_found": "Vehicle not found",
-      "missing_api_key": "API key is required",
-      "unsupported_provider": "The selected country/provider is not supported yet"
+      "invalid_price_entity": "The sensor has no hourly prices EV Guest can read.",
+      "invalid_auth": "Invalid API key.",
+      "cannot_connect": "Cannot connect to MotorAPI.",
+      "timeout": "MotorAPI did not respond in time.",
+      "unsupported_provider": "The selected country is not supported yet.",
+      "unknown": "Unexpected error."
     },
     "abort": {
-      "reauth_successful": "Reauthentication was successful"
+      "already_configured": "An EV Guest with this name already exists.",
+      "reauth_successful": "The MotorAPI key was updated.",
+      "reconfigure_successful": "EV Guest was reconfigured."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "EV Guest options",
-        "description": "Leave the MotorAPI API key empty to keep the current one.",
         "data": {
-          "price_entity": "Electricity price sensor",
-          "currency": "Charge costs currency",
-          "time_format": "Clock format",
-          "duration_format": "Charge time format",
-          "country": "Country",
-          "motorapi_api_key": "MotorAPI API key (optional)"
+          "currency": "Currency"
+        },
+        "data_description": {
+          "currency": "Currency of the electricity prices, used for the charge cost."
         }
       }
     }
@@ -50,12 +74,12 @@
   "entity": {
     "binary_sensor": {
       "charge_now": {
-        "name": "Charge Now"
+        "name": "Charge now"
       }
     },
     "button": {
       "grab_car_data": {
-        "name": "Grab Car Data"
+        "name": "Grab car data"
       },
       "calculate": {
         "name": "Calculate"
@@ -66,62 +90,154 @@
         "name": "SoC (State of Charge)"
       },
       "battery_capacity": {
-        "name": "Battery Capacity"
+        "name": "Battery capacity"
       },
       "charger_power": {
-        "name": "Charger Power"
+        "name": "Charger power"
       },
       "charge_limit": {
-        "name": "Charge Limit"
+        "name": "Charge limit"
       }
     },
     "sensor": {
       "charging_speed": {
-        "name": "Charging Speed"
+        "name": "Charging speed"
       },
       "charge_start_time": {
-        "name": "Charge Start Time"
+        "name": "Charge start time"
       },
       "charge_end_time": {
-        "name": "Charge End Time"
+        "name": "Charge end time"
       },
       "charge_time": {
-        "name": "Charge Time"
+        "name": "Charge time"
       },
       "charge_costs": {
-        "name": "Charge Costs"
+        "name": "Charge costs"
       },
       "car_brand": {
-        "name": "Car Brand"
+        "name": "Car brand"
       },
       "car_model": {
-        "name": "Car Model"
+        "name": "Car model"
       },
       "car_variant": {
-        "name": "Car Variant"
+        "name": "Car variant"
       },
       "car_battery_capacity": {
-        "name": "Car Battery Capacity"
+        "name": "Car battery capacity"
       },
       "status": {
-        "name": "Status"
-      }
-    },
-    "text": {
-      "license_plate": {
-        "name": "License Plate"
-      },
-      "charge_completion_time": {
-        "name": "Charge Completion Time"
+        "name": "Status",
+        "state": {
+          "ready": "Ready",
+          "planned": "Planned",
+          "charging": "Charging",
+          "completed": "Completed",
+          "invalid_input": "Invalid input",
+          "limit_not_above_soc": "Charge limit not above SoC",
+          "no_price_data": "No price data",
+          "not_enough_prices": "Waiting for prices",
+          "no_window": "No charging window"
+        },
+        "state_attributes": {
+          "plan_mode": {
+            "name": "Plan mode",
+            "state": {
+              "continuous": "Continuous",
+              "split": "Split"
+            }
+          },
+          "plan_locked": {
+            "name": "Plan locked",
+            "state": {
+              "true": "Yes",
+              "false": "No"
+            }
+          }
+        }
       }
     },
     "switch": {
       "use_completion_time": {
-        "name": "Use Charge Completion Time"
+        "name": "Use charge completion time"
       },
       "continuous_charging_preferred": {
-        "name": "Continuous Charging Preferred"
+        "name": "Continuous charging preferred"
       }
+    },
+    "text": {
+      "license_plate": {
+        "name": "License plate"
+      }
+    },
+    "time": {
+      "charge_completion_time": {
+        "name": "Charge completion time"
+      }
+    }
+  },
+  "services": {
+    "grab_car_data": {
+      "name": "Grab car data",
+      "description": "Looks up the guest car from the license plate and fills in its battery capacity.",
+      "fields": {
+        "config_entry_id": {
+          "name": "EV Guest",
+          "description": "The EV Guest to use. Can be left out when there is only one."
+        }
+      }
+    },
+    "calculate": {
+      "name": "Calculate",
+      "description": "Calculates the cheapest charging plan from the current inputs.",
+      "fields": {
+        "config_entry_id": {
+          "name": "EV Guest",
+          "description": "The EV Guest to use. Can be left out when there is only one."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_api_key": {
+      "message": "The MotorAPI API key was rejected."
+    },
+    "unsupported_provider": {
+      "message": "The selected country is not supported for license plate lookup."
+    },
+    "license_plate_required": {
+      "message": "Enter a license plate first."
+    },
+    "motorapi_key_missing": {
+      "message": "License plate lookup needs a MotorAPI key. Add one under Reconfigure, or enter the battery capacity manually."
+    },
+    "vehicle_not_found": {
+      "message": "No car was found for this license plate."
+    },
+    "lookup_failed": {
+      "message": "The car lookup failed ({detail}). Try again later."
+    },
+    "invalid_input": {
+      "message": "Battery capacity and charger power must be above 0, and SoC and charge limit between 0 and 100."
+    },
+    "limit_not_above_soc": {
+      "message": "The charge limit must be above the current SoC."
+    },
+    "no_price_data": {
+      "message": "The price sensor has no usable price data."
+    },
+    "not_enough_prices": {
+      "message": "There are not enough known prices before the completion time yet. EV Guest calculates again when new prices arrive."
+    },
+    "no_window": {
+      "message": "No charging window fits before the completion time."
+    }
+  },
+  "issues": {
+    "price_entity_missing": {
+      "title": "EV Guest price sensor is missing",
+      "description": "{title} uses the price sensor `{entity_id}`, which does not exist. Choose another sensor under Reconfigure for the EV Guest integration."
     }
   }
 }

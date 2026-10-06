@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in EV Guest does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: EV Guest version
+      placeholder: "0.8.0"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.10.0"
+    validations:
+      required: true
+  - type: input
+    id: price_sensor
+    attributes:
+      label: Price sensor integration
+      placeholder: Energi Data Service
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Download diagnostics from Settings → Devices & services → EV Guest → ⋮ → Download diagnostics, and paste or attach it here. License plate, VIN and API key are removed automatically.
+      render: json
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from the Home Assistant log.
+      render: text

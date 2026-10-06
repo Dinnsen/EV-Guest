@@ -1,17 +1,16 @@
-"""Entity helpers for EV Guest."""
+"""Base entity for EV Guest."""
 
 from __future__ import annotations
 
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EVGuestCoordinator
 
 
-class EVGuestCoordinatorEntity(CoordinatorEntity[EVGuestCoordinator], Entity):
-    """Base entity class."""
+class EVGuestEntity(CoordinatorEntity[EVGuestCoordinator]):
+    """An EV Guest entity; name and icon come from its translation key."""
 
     _attr_has_entity_name = True
 
@@ -20,13 +19,11 @@ class EVGuestCoordinatorEntity(CoordinatorEntity[EVGuestCoordinator], Entity):
         self._key = key
         self._attr_translation_key = key
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{key}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.config_entry.entry_id)},
-            name=self.coordinator.config_entry.title,
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
+            name=coordinator.config_entry.title,
             manufacturer="Dinnsen",
             model="EV Guest",
+            entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://github.com/Dinnsen/EV-Guest",
         )

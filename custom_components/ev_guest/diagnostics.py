@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import REDACT_KEYS
+from .coordinator import EVGuestConfigEntry
 
 
-async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: EVGuestConfigEntry) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     coordinator = entry.runtime_data
     return {
@@ -19,5 +19,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         "options": async_redact_data(dict(entry.options), REDACT_KEYS),
         "inputs": async_redact_data(dict(coordinator.data.inputs), REDACT_KEYS),
         "results": async_redact_data(dict(coordinator.data.results), REDACT_KEYS),
+        "status": coordinator.status(),
+        "plan_locked": coordinator.is_plan_locked(),
         "service_health": dict(coordinator.data.service_health),
     }

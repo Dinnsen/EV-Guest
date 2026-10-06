@@ -1,14 +1,14 @@
 grab_car_data:
   fields:
-    entry_id:
-      required: true
-      example: "1234abcd"
+    config_entry_id:
+      required: false
       selector:
-        text:
+        config_entry:
+          integration: ev_guest
 calculate:
   fields:
-    entry_id:
-      required: true
-      example: "1234abcd"
+    config_entry_id:
+      required: false
       selector:
-        text:
+        config_entry:
+          integration: ev_guest

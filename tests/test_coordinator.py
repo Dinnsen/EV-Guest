@@ -1,367 +1,479 @@
-"""Unit tests for EV Guest coordinator logic."""
+"""Tests for planning, plan state and entities with a real Home Assistant."""
 
 from __future__ import annotations
 
-from datetime import timedelta, time
-from unittest.mock import MagicMock
+from datetime import datetime, timedelta
+from typing import Any
+from unittest.mock import patch
 
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON, STATE_UNKNOWN
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
-from custom_components.ev_guest.api import VehicleLookupResult
-from custom_components.ev_guest.const import (
-    INPUT_BATTERY_CAPACITY,
-    INPUT_CHARGE_COMPLETION_TIME,
-    INPUT_CHARGE_LIMIT,
-    INPUT_CHARGER_POWER,
-    INPUT_CONTINUOUS_CHARGING_PREFERRED,
-    INPUT_SOC,
-    INPUT_USE_COMPLETION_TIME,
-    RESULT_CHARGE_COSTS,
-    RESULT_CHARGE_END_TIME,
-    RESULT_CHARGE_START_TIME,
-    RESULT_CHARGE_TIME,
-    RESULT_CHARGING_SPEED,
+from custom_components.ev_guest.api import (
+    BatteryLookupResult,
+    EVGuestAuthError,
+    EVGuestLookupError,
+    VehicleLookupResult,
 )
-from custom_components.ev_guest.coordinator import EVGuestCoordinator
+from custom_components.ev_guest.const import CONF_MOTORAPI_KEY, DOMAIN, STORAGE_KEY
+
+from .conftest import CONTINUOUS_PRICES, SPLIT_PRICES, set_prices
+
+STATUS = "sensor.ev_guest_status"
+CHARGE_NOW = "binary_sensor.ev_guest_charge_now"
+START = "sensor.ev_guest_charge_start_time"
+END = "sensor.ev_guest_charge_end_time"
+CHARGE_TIME = "sensor.ev_guest_charge_time"
+COSTS = "sensor.ev_guest_charge_costs"
+SPEED = "sensor.ev_guest_charging_speed"
+CALCULATE = "button.ev_guest_calculate"
+GRAB = "button.ev_guest_grab_car_data"
+SOC = "number.ev_guest_soc_state_of_charge"
+LIMIT = "number.ev_guest_charge_limit"
+COMPLETION = "time.ev_guest_charge_completion_time"
+PLATE = "text.ev_guest_license_plate"
+CONTINUOUS = "switch.ev_guest_continuous_charging_preferred"
+USE_COMPLETION = "switch.ev_guest_use_charge_completion_time"
+
+
+async def _press(hass: HomeAssistant, entity_id: str) -> None:
+    await hass.services.async_call("button", "press", {ATTR_ENTITY_ID: entity_id}, blocking=True)
+    await hass.async_block_till_done()
+
+
+async def _set_number(hass: HomeAssistant, entity_id: str, value: float) -> None:
+    await hass.services.async_call("number", "set_value", {ATTR_ENTITY_ID: entity_id, "value": value}, blocking=True)
+
+
+async def _move(hass: HomeAssistant, freezer: FrozenDateTimeFactory, moment: datetime) -> None:
+    freezer.move_to(moment)
+    async_fire_time_changed(hass, moment)
+    await hass.async_block_till_done()
+
+
+def _state(hass: HomeAssistant, entity_id: str) -> Any:
+    state = hass.states.get(entity_id)
+    assert state is not None, entity_id
+    return state
+
+
+async def test_entities_and_defaults(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    """All entities exist with sensible initial states."""
+    assert _state(hass, STATUS).state == "ready"
+    assert _state(hass, CHARGE_NOW).state == STATE_OFF
+    assert _state(hass, START).state == STATE_UNKNOWN
+    assert _state(hass, SOC).state == "20.0"
+    assert _state(hass, COMPLETION).state == "07:00:00"
+    assert _state(hass, CONTINUOUS).state == STATE_ON
+    assert _state(hass, COSTS).attributes["unit_of_measurement"] == "DKK"
+    assert _state(hass, STATUS).attributes["options"][:4] == ["ready", "planned", "charging", "completed"]
+
+
+async def test_continuous_plan_runs_through_its_states(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime, freezer: FrozenDateTimeFactory
+) -> None:
+    """Calculate, then follow the plan from planned to charging to completed."""
+    await _press(hass, CALCULATE)
+
+    assert _state(hass, STATUS).state == "planned"
+    assert _state(hass, START).state == "2026-04-09T20:00:00+00:00"
+    assert _state(hass, END).state == "2026-04-10T00:12:00+00:00"
+    assert _state(hass, CHARGE_TIME).state == "252"
+    assert float(_state(hass, COSTS).state) == pytest.approx(14.63, rel=1e-3)
+    assert float(_state(hass, SPEED).state) == pytest.approx(14.3)
+    attrs = _state(hass, STATUS).attributes
+    assert attrs["plan_mode"] == "continuous"
+    assert attrs["plan_locked"] is False
+    assert len(attrs["raw_two_days"]) == len(CONTINUOUS_PRICES)
+    assert sum(row["value"] for row in attrs["charging_schedule"]) == 5
+
+    await _move(hass, freezer, now + timedelta(hours=2, minutes=30))
+    assert _state(hass, STATUS).state == "charging"
+    assert _state(hass, CHARGE_NOW).state == STATE_ON
+    assert _state(hass, STATUS).attributes["plan_locked"] is True
+
+    await _move(hass, freezer, now + timedelta(hours=6, minutes=12))
+    assert _state(hass, CHARGE_NOW).state == STATE_OFF
+    assert _state(hass, STATUS).state == "completed"
+
+
+async def test_split_plan(hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime) -> None:
+    set_prices(hass, now, SPLIT_PRICES)
+    await hass.services.async_call("switch", "turn_off", {ATTR_ENTITY_ID: CONTINUOUS}, blocking=True)
+
+    await _press(hass, CALCULATE)
+
+    attrs = _state(hass, STATUS).attributes
+    assert attrs["plan_mode"] == "split"
+    assert [seg["start"][11:16] for seg in attrs["charging_segments"]] == ["21:00", "23:00", "00:48"]
+    assert float(_state(hass, COSTS).state) == pytest.approx(23.98, rel=1e-3)
+
+
+async def test_started_plan_is_locked_against_price_updates(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime, freezer: FrozenDateTimeFactory
+) -> None:
+    """A static start SoC must never make a running plan slide or repeat."""
+    await _press(hass, CALCULATE)
+    first = _state(hass, STATUS).attributes["charging_segments"]
+
+    await _move(hass, freezer, now + timedelta(hours=3))
+    set_prices(hass, now + timedelta(hours=3), [0.01] * 10)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert _state(hass, STATUS).attributes["charging_segments"] == first
+
+    # Calculate always makes a new plan.
+    await _press(hass, CALCULATE)
+    assert _state(hass, STATUS).attributes["charging_segments"] != first
+
+
+async def test_plan_that_has_not_started_follows_new_prices(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
+) -> None:
+    await _press(hass, CALCULATE)
+    assert _state(hass, START).state == "2026-04-09T20:00:00+00:00"
+
+    prices = list(CONTINUOUS_PRICES)
+    prices[1] = 0.01
+    set_prices(hass, now, prices)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert _state(hass, START).state == "2026-04-09T19:00:00+00:00"
+
+
+async def test_price_updates_do_nothing_before_first_calculation(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
+) -> None:
+    set_prices(hass, now, [0.01] * 11)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert _state(hass, STATUS).state == "ready"
+
+
+async def test_waiting_for_prices_then_planning_automatically(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
+) -> None:
+    """Pressing Calculate before enough prices exist plans once prices arrive."""
+    set_prices(hass, now, [1.0, 1.0])
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, CALCULATE)
+    assert err.value.translation_key == "not_enough_prices"
+    assert _state(hass, STATUS).state == "not_enough_prices"
+
+    set_prices(hass, now, CONTINUOUS_PRICES)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert _state(hass, STATUS).state == "planned"
+
+
+@pytest.mark.parametrize(
+    ("soc", "limit", "key"),
+    [(80, 80, "limit_not_above_soc"), (20, 80, None)],
+)
+async def test_failed_calculation_clears_old_plan(
+    hass: HomeAssistant, init_integration: MockConfigEntry, soc: float, limit: float, key: str | None
+) -> None:
+    await _press(hass, CALCULATE)
+    await _set_number(hass, SOC, soc)
+    await _set_number(hass, LIMIT, limit)
+
+    if key is None:
+        await _press(hass, CALCULATE)
+        assert _state(hass, STATUS).state == "planned"
+        return
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, CALCULATE)
+    assert err.value.translation_key == key
+    assert _state(hass, STATUS).state == key
+    assert _state(hass, START).state == STATE_UNKNOWN
+
+
+async def test_missing_price_data(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    hass.states.async_set("sensor.energi_data_service", "unavailable")
+
+    with pytest.raises(ServiceValidationError):
+        await _press(hass, CALCULATE)
+    assert _state(hass, STATUS).state == "no_price_data"
+
+
+async def test_invalid_input(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    init_integration.runtime_data.data.inputs["battery_capacity"] = 0
+
+    with pytest.raises(ServiceValidationError):
+        await _press(hass, CALCULATE)
+    assert _state(hass, STATUS).state == "invalid_input"
+
+
+async def test_without_completion_time_uses_two_day_horizon(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
+) -> None:
+    set_prices(hass, now, [1.0] * 48 + [0.01])
+    await hass.services.async_call("switch", "turn_off", {ATTR_ENTITY_ID: USE_COMPLETION}, blocking=True)
+
+    await _press(hass, CALCULATE)
+
+    assert _state(hass, START).state == "2026-04-09T18:00:00+00:00"
+    assert len(_state(hass, STATUS).attributes["raw_two_days"]) == 48
+
+
+async def test_inputs_are_saved_and_restored(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+    now: datetime,
+) -> None:
+    await _set_number(hass, SOC, 42)
+    await hass.services.async_call("time", "set_value", {ATTR_ENTITY_ID: COMPLETION, "time": "06:30"}, blocking=True)
+    await hass.services.async_call("text", "set_value", {ATTR_ENTITY_ID: PLATE, "value": " ab12345 "}, blocking=True)
+    await _press(hass, CALCULATE)
+    await _move(hass, freezer, now + timedelta(seconds=5))
+
+    stored = hass_storage[STORAGE_KEY.format(entry_id=init_integration.entry_id)]["data"]
+    assert stored["inputs"]["soc"] == 42
+    assert stored["inputs"]["charge_completion_time"] == "06:30"
+    assert stored["auto_recalculate"] is True
+
+    await hass.config_entries.async_reload(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    assert _state(hass, SOC).state == "42.0"
+    assert _state(hass, COMPLETION).state == "06:30:00"
+    assert _state(hass, PLATE).state == "AB12345"
+    assert _state(hass, STATUS).state == "planned"
+
+
+async def test_restores_state_stored_by_0_7(
+    hass: HomeAssistant, now: datetime, mock_config_entry: MockConfigEntry, hass_storage: dict[str, Any]
+) -> None:
+    """0.7.x stored text times and possibly a text charge time."""
+    hass_storage[STORAGE_KEY.format(entry_id=mock_config_entry.entry_id)] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": STORAGE_KEY.format(entry_id=mock_config_entry.entry_id),
+        "data": {
+            "inputs": {"charge_completion_time": "6:15 AM", "soc": 30},
+            "results": {"charge_time": "4h 12m", "charge_start_time": "22:00", "status": "Calculation ready"},
+            "segments": [
+                {"start": (now + timedelta(hours=1)).isoformat(), "end": (now + timedelta(hours=2)).isoformat()}
+            ],
+            "auto_recalculate": True,
+        },
+    }
+    set_prices(hass, now, CONTINUOUS_PRICES)
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _state(hass, COMPLETION).state == "06:15:00"
+    assert _state(hass, CHARGE_TIME).state == STATE_UNKNOWN
+    assert _state(hass, STATUS).state == "planned"
+    assert _state(hass, START).state == "2026-04-09T19:00:00+00:00"
+    await hass.config_entries.async_unload(mock_config_entry.entry_id)
+
+
+async def test_switch_turn_on(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    await hass.services.async_call("switch", "turn_off", {ATTR_ENTITY_ID: USE_COMPLETION}, blocking=True)
+    assert _state(hass, USE_COMPLETION).state == STATE_OFF
+    await hass.services.async_call("switch", "turn_on", {ATTR_ENTITY_ID: USE_COMPLETION}, blocking=True)
+    assert _state(hass, USE_COMPLETION).state == STATE_ON
+
+
+async def test_entity_registry_unique_ids(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    registry = er.async_get(hass)
+    entries = er.async_entries_for_config_entry(registry, init_integration.entry_id)
+    assert {entry.unique_id.removeprefix(f"{init_integration.entry_id}_") for entry in entries} == {
+        "charge_now",
+        "grab_car_data",
+        "calculate",
+        "soc",
+        "charge_limit",
+        "battery_capacity",
+        "charger_power",
+        "charging_speed",
+        "charge_start_time",
+        "charge_end_time",
+        "charge_time",
+        "charge_costs",
+        "status",
+        "car_brand",
+        "car_model",
+        "car_variant",
+        "car_battery_capacity",
+        "use_completion_time",
+        "continuous_charging_preferred",
+        "license_plate",
+        "charge_completion_time",
+    }
+
+
+# ----------------------------------------------------------------------
+# Car lookup
+
+
+async def test_lookup_requires_plate_and_key(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, GRAB)
+    assert err.value.translation_key == "license_plate_required"
+
+    await hass.services.async_call("text", "set_value", {ATTR_ENTITY_ID: PLATE, "value": "AB12345"}, blocking=True)
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, GRAB)
+    assert err.value.translation_key == "motorapi_key_missing"
+    # Lookup errors never replace the plan status.
+    assert _state(hass, STATUS).state == "ready"
 
 
 @pytest.fixture
-def coordinator(mock_hass, mock_config_entry, fixed_now, monkeypatch) -> EVGuestCoordinator:
-    monkeypatch.setattr(
-        "custom_components.ev_guest.coordinator.async_get_clientsession",
-        lambda hass: MagicMock(),
-    )
-    return EVGuestCoordinator(mock_hass, mock_config_entry)
+async def keyed_integration(hass: HomeAssistant, now: datetime, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
+    """EV Guest with a MotorAPI key and a plate entered."""
+    set_prices(hass, now, CONTINUOUS_PRICES)
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(mock_config_entry, data={**mock_config_entry.data, CONF_MOTORAPI_KEY: "key"})
+    with patch("custom_components.ev_guest.coordinator.async_validate_plate_provider_credentials"):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call("text", "set_value", {ATTR_ENTITY_ID: PLATE, "value": "AB12345"}, blocking=True)
+    return mock_config_entry
 
 
-def test_merge_vehicle_results_prefers_primary_but_falls_back_missing_fields(
-    coordinator: EVGuestCoordinator,
+async def test_lookup_fills_car_data(hass: HomeAssistant, keyed_integration: MockConfigEntry) -> None:
+    vehicle = VehicleLookupResult("AB12345", "VIN123", "Tesla", "Model 3", None, 2023, "El", "MotorAPI", {})
+    decoded = VehicleLookupResult("", "VIN123", "Tesla", "Model 3", "Long Range", 2023, None, "NHTSA vPIC", {})
+    battery = BatteryLookupResult(75.0, "Open EV Data", 90.0, {"x": 1})
+    with (
+        patch("custom_components.ev_guest.coordinator.async_lookup_vehicle", return_value=vehicle),
+        patch("custom_components.ev_guest.coordinator.async_decode_vin_nhtsa", return_value=decoded),
+        patch("custom_components.ev_guest.coordinator.async_lookup_battery_open_ev_data", return_value=battery),
+    ):
+        await _press(hass, GRAB)
+
+    assert _state(hass, "sensor.ev_guest_car_brand").state == "Tesla"
+    assert _state(hass, "sensor.ev_guest_car_variant").state == "Long Range"
+    assert _state(hass, "sensor.ev_guest_car_battery_capacity").state == "75.0"
+    assert _state(hass, "number.ev_guest_battery_capacity").state == "75.0"
+    assert _state(hass, STATUS).attributes["vin"] == "VIN123"
+    await hass.config_entries.async_unload(keyed_integration.entry_id)
+
+
+@pytest.mark.parametrize(
+    ("error", "exception", "key"),
+    [
+        (EVGuestAuthError("invalid_auth"), ServiceValidationError, "invalid_api_key"),
+        (EVGuestLookupError("vehicle_not_found"), ServiceValidationError, "vehicle_not_found"),
+        (EVGuestLookupError("timeout"), HomeAssistantError, "lookup_failed"),
+    ],
+)
+async def test_lookup_errors(
+    hass: HomeAssistant, keyed_integration: MockConfigEntry, error: Exception, exception: type[Exception], key: str
 ) -> None:
-    primary = VehicleLookupResult(
-        plate="EN17765",
-        vin="",
-        brand="Mercedes",
-        model="EQB",
-        variant=None,
-        model_year=None,
-        fuel_type=None,
-        source="MotorAPI",
-        raw={},
-    )
-    fallback = VehicleLookupResult(
-        plate="",
-        vin="W1N1234567890",
-        brand="Mercedes-Benz",
-        model="EQB",
-        variant="250+",
-        model_year=2024,
-        fuel_type="Electric",
-        source="NHTSA vPIC",
-        raw={},
-    )
-
-    merged = coordinator._merge_vehicle_results(primary, fallback)
-
-    assert merged.brand == "Mercedes"
-    assert merged.model == "EQB"
-    assert merged.variant == "250+"
-    assert merged.model_year == 2024
-    assert merged.fuel_type == "Electric"
-    assert merged.vin == "W1N1234567890"
+    with (
+        patch("custom_components.ev_guest.coordinator.async_lookup_vehicle", side_effect=error),
+        pytest.raises(exception) as err,
+    ):
+        await _press(hass, GRAB)
+    assert err.value.translation_key == key
+    if key == "invalid_api_key":
+        flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        assert flows and flows[0]["context"]["source"] == "reauth"
+    await hass.config_entries.async_unload(keyed_integration.entry_id)
 
 
-def test_format_duration_returns_minutes_by_default(coordinator: EVGuestCoordinator) -> None:
-    assert coordinator._format_duration(131) == 131
+async def test_lookup_without_vin_or_battery_match(hass: HomeAssistant, keyed_integration: MockConfigEntry) -> None:
+    vehicle = VehicleLookupResult("AB12345", None, "Fiat", "500e", None, None, None, "MotorAPI", {})
+    with (
+        patch("custom_components.ev_guest.coordinator.async_lookup_vehicle", return_value=vehicle),
+        patch(
+            "custom_components.ev_guest.coordinator.async_lookup_battery_open_ev_data",
+            return_value=BatteryLookupResult(None, "Open EV Data", 10.0, None),
+        ),
+    ):
+        await _press(hass, GRAB)
+
+    assert _state(hass, "sensor.ev_guest_car_brand").state == "Fiat"
+    assert _state(hass, "number.ev_guest_battery_capacity").state == "77.0"
+    await hass.config_entries.async_unload(keyed_integration.entry_id)
 
 
-def test_format_duration_returns_hours_and_minutes_when_configured(
-    coordinator: EVGuestCoordinator,
+async def test_no_window_before_completion_time(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
 ) -> None:
-    coordinator.config_entry.options = {"duration_format": "hours_minutes"}
-    assert coordinator._format_duration(131) == "2h 11m"
+    """Enough prices before the deadline, but no block ends in time."""
+    set_prices(hass, now, [1.0, 1.0, 1.0, 1.0])
+    await _set_number(hass, SOC, 0)
+    await _set_number(hass, LIMIT, 100)
+    await _set_number(hass, "number.ev_guest_battery_capacity", 30)
+    await _set_number(hass, "number.ev_guest_charger_power", 10)
+    await hass.services.async_call("time", "set_value", {ATTR_ENTITY_ID: COMPLETION, "time": "22:30"}, blocking=True)
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, CALCULATE)
+    assert err.value.translation_key == "no_window"
 
 
-def test_completion_time_parsing_and_formatting(coordinator: EVGuestCoordinator) -> None:
-    coordinator.config_entry.options = {"time_format": "24h"}
-    assert coordinator.get_completion_time_text() == "07:00"
-    assert coordinator._parse_completion_time("10:15 PM") == time(hour=22, minute=15)
+async def test_non_numeric_input(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    init_integration.runtime_data.data.inputs["soc"] = None
 
-    coordinator.config_entry.options = {"time_format": "12h"}
-    coordinator.data.inputs[INPUT_CHARGE_COMPLETION_TIME] = "22:15"
-    assert coordinator.get_completion_time_text() == "10:15 PM"
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, CALCULATE)
+    assert err.value.translation_key == "invalid_input"
 
 
-def test_calculate_schedule_finds_cheapest_window_from_price_slots(
-    coordinator: EVGuestCoordinator,
+async def test_automatic_recalculation_failure(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
 ) -> None:
-    coordinator.data.inputs.update(
-        {
-            INPUT_SOC: 20,
-            INPUT_BATTERY_CAPACITY: 77,
-            INPUT_CHARGER_POWER: 11,
-            INPUT_CHARGE_LIMIT: 80,
-            INPUT_CHARGE_COMPLETION_TIME: "07:00",
-            INPUT_USE_COMPLETION_TIME: True,
-        }
-    )
-    coordinator.hass.states.get.return_value = MagicMock(
-        state="1.21",
-        attributes={
-            "raw_today": [
-                {"hour": "2026-04-09T20:00:00+02:00", "price": 1.80},
-                {"hour": "2026-04-09T21:00:00+02:00", "price": 1.50},
-                {"hour": "2026-04-09T22:00:00+02:00", "price": 0.40},
-                {"hour": "2026-04-09T23:00:00+02:00", "price": 0.30},
-            ],
-            "forecast": [
-                {"hour": "2026-04-10T00:00:00+02:00", "price": 0.20},
-                {"hour": "2026-04-10T01:00:00+02:00", "price": 0.25},
-                {"hour": "2026-04-10T02:00:00+02:00", "price": 0.90},
-                {"hour": "2026-04-10T03:00:00+02:00", "price": 1.10},
-                {"hour": "2026-04-10T04:00:00+02:00", "price": 1.30},
-                {"hour": "2026-04-10T05:00:00+02:00", "price": 1.40},
-                {"hour": "2026-04-10T06:00:00+02:00", "price": 1.60},
-            ],
-        },
-    )
+    """A failing automatic recalculation keeps a pending plan, or shows why there is none."""
+    coordinator = init_integration.runtime_data
+    await _press(hass, CALCULATE)
+    plan = _state(hass, STATUS).attributes["charging_segments"]
 
-    result = coordinator._calculate_schedule()
+    hass.states.async_set("sensor.energi_data_service", "unavailable")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _state(hass, STATUS).state == "planned"
+    assert _state(hass, STATUS).attributes["charging_segments"] == plan
 
-    assert result[RESULT_CHARGING_SPEED] == pytest.approx(14.3, rel=1e-2)
-    assert result[RESULT_CHARGE_TIME] == 252
-    assert result[RESULT_CHARGE_START_TIME] == "22:00"
-    assert result[RESULT_CHARGE_END_TIME] == "02:12"
-    assert result[RESULT_CHARGE_COSTS] == pytest.approx(14.63, rel=1e-2)
-
-
-def test_calculate_schedule_raises_when_charge_limit_is_not_above_soc(
-    coordinator: EVGuestCoordinator,
-) -> None:
-    coordinator.data.inputs.update(
-        {
-            INPUT_SOC: 80,
-            INPUT_BATTERY_CAPACITY: 77,
-            INPUT_CHARGER_POWER: 11,
-            INPUT_CHARGE_LIMIT: 80,
-            INPUT_CHARGE_COMPLETION_TIME: "07:00",
-        }
-    )
-
-    with pytest.raises(ValueError, match="Charge limit must be above current SoC"):
-        coordinator._calculate_schedule()
-
-
-def test_calculate_schedule_can_split_when_continuous_is_off(
-    coordinator: EVGuestCoordinator,
-) -> None:
-    coordinator.data.inputs.update(
-        {
-            INPUT_SOC: 20,
-            INPUT_BATTERY_CAPACITY: 77,
-            INPUT_CHARGER_POWER: 11,
-            INPUT_CHARGE_LIMIT: 80,
-            INPUT_CHARGE_COMPLETION_TIME: "07:00",
-            INPUT_USE_COMPLETION_TIME: True,
-            INPUT_CONTINUOUS_CHARGING_PREFERRED: False,
-        }
-    )
-    coordinator.hass.states.get.return_value = MagicMock(
-        state="1.21",
-        attributes={
-            "forecast": [
-                {"hour": "2026-04-09T20:00:00+02:00", "price": 1.80},
-                {"hour": "2026-04-09T21:00:00+02:00", "price": 0.10},
-                {"hour": "2026-04-09T22:00:00+02:00", "price": 1.50},
-                {"hour": "2026-04-09T23:00:00+02:00", "price": 0.20},
-                {"hour": "2026-04-10T00:00:00+02:00", "price": 1.40},
-                {"hour": "2026-04-10T01:00:00+02:00", "price": 0.30},
-                {"hour": "2026-04-10T02:00:00+02:00", "price": 1.30},
-            ],
-        },
-    )
-
-    result = coordinator._calculate_schedule()
-
-    # 4.2 h needed: full hours at 0.10, 0.20, 0.30 and 1.30, the remaining
-    # 0.2 h at 1.40 (the most expensive chosen hour), at 11 kWh/h.
-    assert result[RESULT_CHARGE_COSTS] == pytest.approx(23.98, rel=1e-3)
-    assert coordinator.data.results["plan_mode"] == "split"
-    segments = [(seg["start"].strftime("%H:%M"), seg["end"].strftime("%H:%M")) for seg in result["plan_segments"]]
-    # The partial hour sits at the end of 00:00 so it joins the 01:00-03:00 block.
-    assert segments == [("21:00", "22:00"), ("23:00", "00:00"), ("00:48", "03:00")]
-
-
-def test_charge_now_follows_exact_segment_end_not_whole_hours(
-    coordinator: EVGuestCoordinator, fixed_now
-) -> None:
-    coordinator._set_plan(
-        [{"start": fixed_now - timedelta(hours=1), "end": fixed_now + timedelta(minutes=20)}]
-    )
-
-    assert coordinator.is_charge_now() is True
-    assert coordinator.is_charge_now(fixed_now + timedelta(minutes=19)) is True
-    # 0.6.x stayed on until the end of the hour (21:00); now it stops at 20:20.
-    assert coordinator.is_charge_now(fixed_now + timedelta(minutes=20)) is False
-    assert coordinator.is_charge_now(fixed_now + timedelta(minutes=50)) is False
-
-
-def _price_state(fixed_now, prices):
-    return MagicMock(
-        state="1.00",
-        attributes={
-            "forecast": [
-                {"hour": (fixed_now + timedelta(hours=offset)).isoformat(), "price": price}
-                for offset, price in enumerate(prices)
-            ]
-        },
-    )
-
-
-@pytest.mark.asyncio
-async def test_price_update_does_not_recalculate_a_started_plan(
-    coordinator: EVGuestCoordinator, fixed_now
-) -> None:
-    coordinator.data.inputs.update(
-        {
-            INPUT_SOC: 50,
-            INPUT_BATTERY_CAPACITY: 10,
-            INPUT_CHARGER_POWER: 5,
-            INPUT_CHARGE_LIMIT: 100,
-            INPUT_USE_COMPLETION_TIME: False,
-        }
-    )
-    coordinator.hass.states.get.return_value = _price_state(fixed_now, [0.1, 1.0, 1.0, 1.0])
-
-    await coordinator.async_calculate()
-    assert coordinator.is_plan_locked() is True  # plan starts 20:00 == now
-    first_segments = list(coordinator._plan_segments)
-
-    # Cheaper prices appear later, but the SoC is static: replanning would
-    # charge the same energy a second time.
-    coordinator.hass.states.get.return_value = _price_state(fixed_now, [9.0, 0.01, 0.01, 0.01])
-    coordinator._handle_price_update(MagicMock())
-    coordinator.hass.async_create_task.assert_not_called()
+    coordinator._set_plan([])
     await coordinator.async_calculate(manual=False)
-    assert coordinator._plan_segments == first_segments
-
-    # Pressing Calculate is always allowed and makes a new plan.
-    await coordinator.async_calculate()
-    assert coordinator._plan_segments != first_segments
+    await hass.async_block_till_done()
+    assert _state(hass, STATUS).state == "no_price_data"
 
 
-@pytest.mark.asyncio
-async def test_price_update_recalculates_plan_that_has_not_started(
-    coordinator: EVGuestCoordinator, fixed_now
+async def test_automatic_recalculation_skipped_when_locked(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime, freezer: FrozenDateTimeFactory
 ) -> None:
-    coordinator.data.inputs.update(
-        {
-            INPUT_SOC: 50,
-            INPUT_BATTERY_CAPACITY: 10,
-            INPUT_CHARGER_POWER: 5,
-            INPUT_CHARGE_LIMIT: 100,
-            INPUT_USE_COMPLETION_TIME: False,
-        }
-    )
-    coordinator.hass.states.get.return_value = _price_state(fixed_now, [1.0, 1.0, 0.1, 1.0])
+    coordinator = init_integration.runtime_data
+    await _press(hass, CALCULATE)
+    await _move(hass, freezer, now + timedelta(hours=3))
+    plan = list(coordinator._plan_segments)
 
-    await coordinator.async_calculate()
-    assert coordinator.is_plan_locked() is False
+    await coordinator.async_calculate(manual=False)
 
-    coordinator._handle_price_update(MagicMock())
-    coordinator.hass.async_create_task.assert_called_once()
-    coordinator.hass.async_create_task.call_args.args[0].close()
+    assert coordinator._plan_segments == plan
 
 
-def test_price_update_is_ignored_before_first_manual_calculation(
-    coordinator: EVGuestCoordinator,
-) -> None:
-    coordinator._handle_price_update(MagicMock())
-    coordinator.hass.async_create_task.assert_not_called()
+async def test_service_health_recovers(hass: HomeAssistant, keyed_integration: MockConfigEntry) -> None:
+    vehicle = VehicleLookupResult("AB12345", None, "Fiat", "500e", None, None, None, "MotorAPI", {})
+    with (
+        patch("custom_components.ev_guest.coordinator.async_lookup_vehicle", side_effect=EVGuestLookupError("timeout")),
+        pytest.raises(HomeAssistantError),
+    ):
+        await _press(hass, GRAB)
+    assert _state(hass, "sensor.ev_guest_car_brand").state == "unavailable"
 
-
-@pytest.mark.asyncio
-async def test_failed_manual_calculation_clears_old_plan(
-    coordinator: EVGuestCoordinator, fixed_now
-) -> None:
-    coordinator._set_plan([{"start": fixed_now, "end": fixed_now + timedelta(hours=1)}])
-    coordinator.data.inputs.update({INPUT_SOC: 80, INPUT_CHARGE_LIMIT: 80})
-
-    await coordinator.async_calculate()
-
-    assert coordinator.is_charge_now() is False
-    assert coordinator.data.results["status"] == "Charge limit must be above current SoC"
-
-
-@pytest.mark.asyncio
-async def test_state_round_trips_through_storage(
-    coordinator: EVGuestCoordinator, fixed_now, patch_storage_and_timers
-) -> None:
-    coordinator.data.inputs[INPUT_SOC] = 42
-    coordinator._auto_recalculate = True
-    coordinator._set_plan([{"start": fixed_now, "end": fixed_now + timedelta(minutes=95)}])
-    stored = coordinator._data_to_store()
-
-    restored = EVGuestCoordinator(coordinator.hass, coordinator.config_entry)
-    patch_storage_and_timers.async_load.return_value = stored
-    await restored._async_load_state()
-
-    assert restored.data.inputs[INPUT_SOC] == 42
-    assert restored._auto_recalculate is True
-    assert restored.is_charge_now(fixed_now + timedelta(minutes=94)) is True
-    assert restored.is_charge_now(fixed_now + timedelta(minutes=95)) is False
-
-
-@pytest.mark.asyncio
-async def test_lookup_without_motorapi_key_keeps_calculator_usable(
-    coordinator: EVGuestCoordinator,
-) -> None:
-    coordinator.config_entry.data["motorapi_api_key"] = ""
-    coordinator.data.inputs["license_plate"] = "AB12345"
-
-    await coordinator.async_lookup_car_data()
-
-    assert "MotorAPI API key not configured" in coordinator.data.results["status"]
-
-
-def test_calculate_schedule_without_completion_time_uses_visible_two_day_horizon(
-    coordinator: EVGuestCoordinator, fixed_now
-) -> None:
-    coordinator.data.inputs.update(
-        {
-            INPUT_SOC: 0,
-            INPUT_BATTERY_CAPACITY: 10,
-            INPUT_CHARGER_POWER: 10,
-            INPUT_CHARGE_LIMIT: 10,
-            INPUT_USE_COMPLETION_TIME: False,
-            INPUT_CONTINUOUS_CHARGING_PREFERRED: False,
-        }
-    )
-
-    forecast = []
-    for offset in range(48):
-        forecast.append(
-            {
-                "hour": (fixed_now + timedelta(hours=offset)).isoformat(),
-                "price": 1.0,
-            }
-        )
-    forecast.append(
-        {
-            "hour": (fixed_now + timedelta(hours=48)).isoformat(),
-            "price": 0.01,
-        }
-    )
-
-    coordinator.hass.states.get.return_value = MagicMock(
-        state="1.00",
-        attributes={"forecast": forecast},
-    )
-
-    result = coordinator._calculate_schedule()
-
-    assert result[RESULT_CHARGE_START_TIME] == "20:00"
-    assert len(coordinator.data.results["raw_two_days"]) == 48
-    assert any(
-        entry["value"] == 1.0
-        for entry in coordinator.data.results["charging_schedule"]
-    )
+    with (
+        patch("custom_components.ev_guest.coordinator.async_lookup_vehicle", return_value=vehicle),
+        patch(
+            "custom_components.ev_guest.coordinator.async_lookup_battery_open_ev_data",
+            return_value=BatteryLookupResult(37.3, "Open EV Data", 80.0, {}),
+        ),
+    ):
+        await _press(hass, GRAB)
+    assert _state(hass, "sensor.ev_guest_car_brand").state == "Fiat"
+    await hass.config_entries.async_unload(keyed_integration.entry_id)

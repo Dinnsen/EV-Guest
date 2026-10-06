@@ -1,102 +1,97 @@
-"""Shared pytest helpers for EV Guest."""
+"""Fixtures for EV Guest tests."""
+
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from collections.abc import AsyncGenerator, Sequence
+from datetime import datetime, timedelta
 
-import pytest
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from custom_components.ev_guest.const import (
+    CONF_COUNTRY,
+    CONF_CURRENCY,
+    CONF_MOTORAPI_KEY,
+    CONF_PLATE_PROVIDER,
+    CONF_PRICE_ENTITY,
+    DEFAULT_PLATE_PROVIDER,
+    DOMAIN,
+)
 
+PRICE_ENTITY = "sensor.energi_data_service"
+NOW = "2026-04-09T20:00:00+02:00"
 
-@pytest.fixture(autouse=True)
-def patch_data_update_coordinator_init(monkeypatch):
-    """Patch Home Assistant's DataUpdateCoordinator init for lightweight unit tests.
-
-    Newer Home Assistant versions perform frame-helper checks inside
-    DataUpdateCoordinator.__init__, which fail in this stripped-down pytest setup.
-    The integration runtime code is not touched; this only affects tests.
-    """
-
-    def _fake_init(self, hass, logger, *, name=None, update_interval=None, always_update=True, config_entry=None):
-        self.hass = hass
-        self.logger = logger
-        self.name = name
-        self.update_interval = update_interval
-        self.always_update = always_update
-        self.config_entry = config_entry
-        self.data = None
-        self.last_update_success = True
-        self._listeners = {}
-
-    monkeypatch.setattr(DataUpdateCoordinator, "__init__", _fake_init)
+# Prices from 20:00 used by the continuous example: the cheapest 4.2 h
+# block before 07:00 starts at 22:00.
+CONTINUOUS_PRICES = [1.80, 1.50, 0.40, 0.30, 0.20, 0.25, 0.90, 1.10, 1.30, 1.40, 1.60]
+# Prices from 20:00 used by the split example.
+SPLIT_PRICES = [1.80, 0.10, 1.50, 0.20, 1.40, 0.30, 1.30]
 
 
 @pytest.fixture(autouse=True)
-def patch_storage_and_timers(monkeypatch):
-    """Keep coordinator tests free of disk storage and real HA timers."""
-    import custom_components.ev_guest.coordinator as coordinator_module
-
-    store = MagicMock()
-    store.async_load = AsyncMock(return_value=None)
-    store.async_remove = AsyncMock()
-    monkeypatch.setattr(coordinator_module, "Store", MagicMock(return_value=store))
-    monkeypatch.setattr(
-        coordinator_module, "async_track_point_in_time", MagicMock(return_value=MagicMock())
-    )
-    return store
+def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
+    """Allow loading custom_components in every test."""
 
 
 @pytest.fixture
-def mock_config_entry() -> SimpleNamespace:
-    """Return a lightweight config entry stub for unit-style tests."""
-    return SimpleNamespace(
-        entry_id="test-entry-id",
-        title="EV Guest",
-        data={
-            "price_entity": "sensor.energi_data_service",
-            "currency": "DKK",
-            "time_format": "24h",
-            "duration_format": "minutes",
-            "motorapi_api_key": "test-key",
-            "country": "Denmark",
-            "plate_provider": "motorapi_dk",
+async def now(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> datetime:
+    """Freeze time at 20:00 Copenhagen time."""
+    await hass.config.async_set_time_zone("Europe/Copenhagen")
+    moment = dt_util.parse_datetime(NOW)
+    assert moment is not None
+    freezer.move_to(moment)
+    return moment
+
+
+def set_prices(hass: HomeAssistant, start: datetime, prices: Sequence[float]) -> None:
+    """Set the price sensor with hourly prices starting at ``start``."""
+    hass.states.async_set(
+        PRICE_ENTITY,
+        str(prices[0]),
+        {
+            "raw_today": [
+                {"hour": (start + timedelta(hours=offset)).isoformat(), "price": price}
+                for offset, price in enumerate(prices)
+            ],
+            "raw_tomorrow": [],
         },
-        options={},
-        runtime_data=None,
-        version=7,
-        minor_version=0,
     )
 
 
 @pytest.fixture
-def mock_hass() -> MagicMock:
-    """Return a lightweight Home Assistant stub for unit-style tests."""
-    hass = MagicMock()
-    hass.states = MagicMock()
-    hass.async_create_task = MagicMock()
-    hass.services = MagicMock()
-    hass.services.async_call = AsyncMock()
-    hass.config_entries = MagicMock()
-    hass.config_entries.async_update_entry = MagicMock()
-    return hass
+def mock_config_entry() -> MockConfigEntry:
+    """An EV Guest entry without a MotorAPI key."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="EV Guest",
+        unique_id="EV Guest",
+        data={
+            "name": "EV Guest",
+            CONF_PRICE_ENTITY: PRICE_ENTITY,
+            CONF_COUNTRY: "Denmark",
+            CONF_MOTORAPI_KEY: "",
+            CONF_PLATE_PROVIDER: DEFAULT_PLATE_PROVIDER,
+        },
+        options={CONF_CURRENCY: "DKK"},
+        version=7,
+        minor_version=1,
+    )
 
 
 @pytest.fixture
-def hass(mock_hass: MagicMock) -> MagicMock:
-    """Alias mock_hass for tests that expect a hass fixture."""
-    return mock_hass
-
-
-@pytest.fixture
-def fixed_now(monkeypatch):
-    """Freeze dt_util.now() to a fixed Copenhagen-aware datetime."""
-    now = dt_util.parse_datetime("2026-04-09T20:00:00+02:00")
-    monkeypatch.setattr(dt_util, "now", lambda: now)
-    return now
+async def init_integration(
+    hass: HomeAssistant, now: datetime, mock_config_entry: MockConfigEntry
+) -> AsyncGenerator[MockConfigEntry]:
+    """Set up EV Guest with the continuous example prices."""
+    set_prices(hass, now, CONTINUOUS_PRICES)
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    yield mock_config_entry
+    if mock_config_entry.state is ConfigEntryState.LOADED:
+        await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
