@@ -455,7 +455,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         """
         if show_in_status:
             self._set_error(key, detail)
-            self.async_update_listeners()
+        # Also publishes changed service health (car sensor availability).
+        self.async_update_listeners()
         error_cls = HomeAssistantError if service_error else ServiceValidationError
         raise error_cls(
             translation_domain=DOMAIN,
