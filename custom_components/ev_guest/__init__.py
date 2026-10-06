@@ -74,21 +74,12 @@ def _remove_legacy_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
             _LOGGER.info("Removed legacy entity %s", entity_id)
 
 
-def _normalize_country(value: str | None) -> str:
-    if value and value.strip().lower() in {"dk", "denmark", "danmark"}:
-        return DEFAULT_COUNTRY
-    return DEFAULT_COUNTRY
-
-
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate older config entries.
 
     Old keys (charger settings, time and duration formats) are left in place
     so that a downgrade still finds its configuration.
     """
-    if entry.version > 7:
-        return False
-
     data = dict(entry.data)
     options = dict(entry.options)
 
@@ -98,11 +89,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data.setdefault(CONF_CURRENCY, DEFAULT_CURRENCY)
         data.setdefault(CONF_MOTORAPI_KEY, "")
         data.setdefault(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER)
-        data[CONF_COUNTRY] = _normalize_country(data.get(CONF_COUNTRY))
+        # Denmark is the only supported country; older entries stored "dk" etc.
+        data[CONF_COUNTRY] = DEFAULT_COUNTRY
         data.pop("language", None)
         options.pop("language", None)
         if CONF_COUNTRY in options:
-            options[CONF_COUNTRY] = _normalize_country(options.get(CONF_COUNTRY))
+            options[CONF_COUNTRY] = DEFAULT_COUNTRY
 
     # 7.1: connection settings live in data (changed via reconfigure);
     # options only hold preferences.

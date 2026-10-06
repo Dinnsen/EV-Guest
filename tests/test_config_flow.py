@@ -177,3 +177,12 @@ async def test_options_flow(hass: HomeAssistant, mock_config_entry: MockConfigEn
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert mock_config_entry.options == {"currency": "EUR"}
+
+
+async def test_currency_from_home_assistant_is_offered(hass: HomeAssistant) -> None:
+    await hass.config.async_update(currency="GBP")
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {**USER_INPUT, "currency": "GBP"})
+
+    assert result["options"] == {"currency": "GBP"}

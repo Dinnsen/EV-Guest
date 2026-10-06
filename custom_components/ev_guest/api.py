@@ -8,7 +8,7 @@ import logging
 import re
 from typing import Any
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 from .const import (
     COUNTRY_DENMARK,
@@ -21,6 +21,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+REQUEST_TIMEOUT = ClientTimeout(total=20)
+DATASET_TIMEOUT = ClientTimeout(total=30)
 
 
 class EVGuestError(Exception):
@@ -126,7 +129,7 @@ async def async_validate_motorapi_key(session: ClientSession, api_key: str) -> N
     headers = {"User-Agent": USER_AGENT, "X-AUTH-TOKEN": api_key}
 
     try:
-        async with session.get(url, headers=headers, timeout=20) as resp:
+        async with session.get(url, headers=headers, timeout=REQUEST_TIMEOUT) as resp:
             if resp.status == 401:
                 raise EVGuestAuthError("invalid_auth")
             if resp.status in (200, 404):
@@ -177,7 +180,7 @@ async def async_lookup_vehicle_motorapi(session: ClientSession, plate: str, api_
     url = f"{MOTORAPI_BASE_URL}/vehicles/{plate}"
     headers = {"User-Agent": USER_AGENT, "X-AUTH-TOKEN": api_key}
     try:
-        async with session.get(url, headers=headers, timeout=20) as resp:
+        async with session.get(url, headers=headers, timeout=REQUEST_TIMEOUT) as resp:
             if resp.status == 401:
                 raise EVGuestAuthError("invalid_auth")
             if resp.status == 404:
@@ -215,7 +218,7 @@ async def async_decode_vin_nhtsa(
     if model_year:
         url += f"&modelyear={model_year}"
     try:
-        async with session.get(url, headers={"User-Agent": USER_AGENT}, timeout=20) as resp:
+        async with session.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT) as resp:
             if resp.status != 200:
                 return None
             payload = await resp.json()
@@ -270,7 +273,7 @@ async def async_lookup_battery_open_ev_data(
 async def _async_fetch_open_ev_dataset(session: ClientSession) -> Any:
     for url in (OPEN_EV_DATA_URL, OPEN_EV_DATA_FALLBACK_URL):
         try:
-            async with session.get(url, headers={"User-Agent": USER_AGENT}, timeout=30) as resp:
+            async with session.get(url, headers={"User-Agent": USER_AGENT}, timeout=DATASET_TIMEOUT) as resp:
                 if resp.status == 200:
                     return await resp.json(content_type=None)
         except (ClientError, TimeoutError):

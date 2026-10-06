@@ -328,10 +328,6 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     # Status
 
     @property
-    def error(self) -> str | None:
-        return self._error
-
-    @property
     def error_detail(self) -> str | None:
         return self._error_detail
 
@@ -679,16 +675,13 @@ def parse_segments(raw: list[Any]) -> list[Segment]:
 
 
 def _window_cost(window: list[PriceSlot], energy_needed_kwh: float, required_hours: float) -> float:
+    """Cost of charging from the start of ``window``; the last hour may be partial."""
     energy_per_hour = energy_needed_kwh / required_hours
-    remaining = required_hours
-    total = 0.0
-    for _start, price in window:
-        if remaining <= 0:
-            break
-        fraction = min(1.0, remaining)
-        total += price * energy_per_hour * fraction
-        remaining -= fraction
-    return total
+    full_hours = int(required_hours)
+    cost = sum(price for _start, price in window[:full_hours]) * energy_per_hour
+    if len(window) > full_hours:
+        cost += window[full_hours][1] * energy_per_hour * (required_hours - full_hours)
+    return cost
 
 
 def select_continuous_segments(

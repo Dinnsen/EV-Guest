@@ -400,3 +400,80 @@ async def test_lookup_without_vin_or_battery_match(hass: HomeAssistant, keyed_in
     assert _state(hass, "sensor.ev_guest_car_brand").state == "Fiat"
     assert _state(hass, "number.ev_guest_battery_capacity").state == "77.0"
     await hass.config_entries.async_unload(keyed_integration.entry_id)
+
+
+async def test_no_window_before_completion_time(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
+) -> None:
+    """Enough prices before the deadline, but no block ends in time."""
+    set_prices(hass, now, [1.0, 1.0, 1.0, 1.0])
+    await _set_number(hass, SOC, 0)
+    await _set_number(hass, LIMIT, 100)
+    await _set_number(hass, "number.ev_guest_battery_capacity", 30)
+    await _set_number(hass, "number.ev_guest_charger_power", 10)
+    await hass.services.async_call("time", "set_value", {ATTR_ENTITY_ID: COMPLETION, "time": "22:30"}, blocking=True)
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, CALCULATE)
+    assert err.value.translation_key == "no_window"
+
+
+async def test_non_numeric_input(hass: HomeAssistant, init_integration: MockConfigEntry) -> None:
+    init_integration.runtime_data.data.inputs["soc"] = None
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _press(hass, CALCULATE)
+    assert err.value.translation_key == "invalid_input"
+
+
+async def test_automatic_recalculation_failure(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime
+) -> None:
+    """A failing automatic recalculation keeps a pending plan, or shows why there is none."""
+    coordinator = init_integration.runtime_data
+    await _press(hass, CALCULATE)
+    plan = _state(hass, STATUS).attributes["charging_segments"]
+
+    hass.states.async_set("sensor.energi_data_service", "unavailable")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _state(hass, STATUS).state == "planned"
+    assert _state(hass, STATUS).attributes["charging_segments"] == plan
+
+    coordinator._set_plan([])
+    await coordinator.async_calculate(manual=False)
+    await hass.async_block_till_done()
+    assert _state(hass, STATUS).state == "no_price_data"
+
+
+async def test_automatic_recalculation_skipped_when_locked(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime, freezer: FrozenDateTimeFactory
+) -> None:
+    coordinator = init_integration.runtime_data
+    await _press(hass, CALCULATE)
+    await _move(hass, freezer, now + timedelta(hours=3))
+    plan = list(coordinator._plan_segments)
+
+    await coordinator.async_calculate(manual=False)
+
+    assert coordinator._plan_segments == plan
+
+
+async def test_service_health_recovers(hass: HomeAssistant, keyed_integration: MockConfigEntry) -> None:
+    vehicle = VehicleLookupResult("AB12345", None, "Fiat", "500e", None, None, None, "MotorAPI", {})
+    with (
+        patch("custom_components.ev_guest.coordinator.async_lookup_vehicle", side_effect=EVGuestLookupError("timeout")),
+        pytest.raises(HomeAssistantError),
+    ):
+        await _press(hass, GRAB)
+    assert _state(hass, "sensor.ev_guest_car_brand").state == "unavailable"
+
+    with (
+        patch("custom_components.ev_guest.coordinator.async_lookup_vehicle", return_value=vehicle),
+        patch(
+            "custom_components.ev_guest.coordinator.async_lookup_battery_open_ev_data",
+            return_value=BatteryLookupResult(37.3, "Open EV Data", 80.0, {}),
+        ),
+    ):
+        await _press(hass, GRAB)
+    assert _state(hass, "sensor.ev_guest_car_brand").state == "Fiat"
+    await hass.config_entries.async_unload(keyed_integration.entry_id)

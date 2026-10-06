@@ -170,3 +170,10 @@ def test_extract_price_slots_today_tomorrow_arrays() -> None:
 @pytest.mark.parametrize("state", [None, State("sensor.prices", "unavailable"), State("sensor.prices", "1", {})])
 def test_extract_price_slots_without_prices(state) -> None:
     assert extract_price_slots(state, START) == []
+
+
+def test_extract_price_slots_today_without_tomorrow() -> None:
+    now = dt_util.as_local(START)
+    state = State("sensor.prices", "1.0", {"today": [1.0], "tomorrow": None})
+
+    assert len(extract_price_slots(state, now)) == 1
