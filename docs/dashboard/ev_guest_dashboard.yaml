@@ -27,7 +27,7 @@ cards:
         icon: mdi:car-electric
       - type: custom:bubble-card
         card_type: button
-        entity: number.ev_guest_soc
+        entity: number.ev_guest_soc_state_of_charge
         name: SoC
         icon: mdi:battery-50
       - type: custom:bubble-card
@@ -37,7 +37,7 @@ cards:
         icon: mdi:battery-arrow-up
       - type: custom:bubble-card
         card_type: button
-        entity: text.ev_guest_charge_completion_time
+        entity: time.ev_guest_charge_completion_time
         name: Charge Completion Time
         icon: mdi:clock-check-outline
       - type: custom:bubble-card

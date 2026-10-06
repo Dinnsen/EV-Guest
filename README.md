@@ -3,207 +3,236 @@
 ![EV Guest](https://raw.githubusercontent.com/Dinnsen/EV-Guest/main/docs/assets/logo.png)
 
 [![GitHub Release][releases-shield]][releases]
-[![GitHub All Releases][download-all-shield]][releases]
+[![Downloads][download-all-shield]][releases]
 [![HACS][hacs-shield]][hacs]
+[![Tests][tests-shield]][tests]
+[![hassfest][hassfest-shield]][hassfest]
+[![HACS validation][validate-shield]][validate]
 [![BuyMeCoffee][buymecoffee-shield]][buymecoffee]
 
-EV Guest for Home Assistant helps you find the cheapest charging window for guest EVs without connecting the car to Home Assistant.
+**Find the cheapest time to charge a guest's electric car – without connecting the car to Home Assistant.**
 
-EV Guest is a calculator. It does not start or stop charging itself; it tells you (and your automations) when to charge.
+Enter the license plate, the car's current charge level and when it must be ready. EV Guest looks up the car, works out how much energy it needs and finds the cheapest charging window from your electricity prices. It then tells your automations exactly when to charge.
 
-The integration:
-- looks up vehicle identity from the guest's license plate (optional, needs a MotorAPI key)
-- enriches vehicle data from the VIN when available
-- matches the vehicle against Open EV Data to estimate battery capacity
-- combines that with a supported electricity price sensor to calculate the cheapest charging plan
-- exposes the plan through `binary_sensor.charge_now` so any charger can follow it
-- can feed EV Smart Charging with SoC, target SoC and charging speed for a guest car
+EV Guest is a calculator: it never switches a charger itself. Pair it with a simple automation or with [EV Smart Charging](https://github.com/jonasbkarlsson/ev_smart_charging) to do the charging.
 
-## Table of content
+## Contents
+
+- [Features](#features)
 - [Installation](#installation)
 - [Setup](#setup)
-- [Configuration options](#configuration-options)
 - [Usage](#usage)
 - [Entities](#entities)
-- [Service actions](#service-actions)
+- [Actions](#actions)
 - [Charging the car](#charging-the-car)
 - [Live SoC](#live-soc)
-- [Supported electricity price sensors](#supported-electricity-price-sensors)
-- [Vehicle lookup providers](#vehicle-lookup-providers)
-- [Data update behavior](#data-update-behavior)
-- [Legal information](#legal-information)
+- [How data is updated](#how-data-is-updated)
+- [Supported price sensors](#supported-price-sensors)
+- [Known limitations](#known-limitations)
+- [Troubleshooting](#troubleshooting)
 - [Removal](#removal)
+- [Legal](#legal)
 
-# Installation
+## Features
 
-### Option 1 - HACS
-- Ensure HACS is installed.
-- Add this repository as a custom repository in HACS with category Integration.
-- Install EV Guest.
-- Restart Home Assistant.
+- **License plate lookup** (Denmark, via MotorAPI) with VIN decoding and battery capacity matched from Open EV Data. Optional – you can always enter the battery capacity yourself.
+- **Cheapest charging plan** before a completion time, either as one continuous block or split across the cheapest hours.
+- **`Charge now`** turns on exactly while the plan says charge, to the minute.
+- **Plans that behave**: a plan is locked once it starts, survives restarts and follows new prices until it starts.
+- **Native Home Assistant entities**: timestamps, durations, a status with translated states, a time picker for the completion time, and battery, power and energy device classes.
+- **Fully translated** (English and Danish), with icons, repairs, diagnostics and reconfiguration.
 
-### Option 2 - Manual
-- Download the latest release.
-- Copy `custom_components/ev_guest` into your Home Assistant `custom_components` folder.
-- Restart Home Assistant.
+### Use cases
 
-# Setup
+- A guest arrives in the evening with 20 % battery and leaves at 07:00 – charge in the cheapest hours overnight.
+- You rent out a parking spot with a charger and want to show the expected cost before charging.
+- Your own cars are handled by EV Smart Charging, and you want the same smart charging for visitors whose cars are not in Home Assistant.
 
-Add EV Guest from Settings → Devices & Services.
+## Installation
 
-License plate lookup is optional. Without a MotorAPI key EV Guest still calculates plans; you just enter battery capacity manually.
+### HACS (recommended)
 
-To use license plate lookup, create a MotorAPI API key:
-1. Go to https://www.motorapi.dk/
-2. Enter your email address under **Få adgang nu**
-3. Submit the form and wait for the email with your API key
-4. Paste that API key into EV Guest during setup
+[![Open your Home Assistant instance and open this repository in HACS.][my-hacs-badge]][my-hacs]
 
-During setup, EV Guest asks for:
-- Name
-- Electricity Price Sensor
-- Charge Costs Currency (`DKK`, `EUR`, `USD`)
-- Clock format (`24h` or `12h`)
-- Charge Time format (`minutes` or `hours_minutes`)
-- Country (`Denmark`)
-- MotorAPI API key (optional)
+1. Open the link above, or add `https://github.com/Dinnsen/EV-Guest` as a custom repository in HACS (type **Integration**).
+2. Install **EV Guest** and restart Home Assistant.
 
-No user setup is needed for:
-- NHTSA vPIC
-- Open EV Data
+### Manual
 
-# Configuration options
+1. Download `ev_guest.zip` from the [latest release][releases].
+2. Unzip it into `config/custom_components/ev_guest`.
+3. Restart Home Assistant.
 
-After setup, the options flow lets you change:
-- Electricity Price Sensor
-- Charge Costs Currency
-- Clock format
-- Charge Time format
-- Country
-- MotorAPI API key (leave empty to keep the current one)
+## Setup
 
-# Usage
+[![Open your Home Assistant instance and start setting up EV Guest.][my-config-badge]][my-config]
 
-1. Enter the plate in the license-plate text entity.
-2. Press Grab Car Data.
-3. Review the returned brand, model, variant, and battery estimate.
-4. Set SoC, charger power, charge limit, and completion time.
-5. Press Calculate.
-6. Let an automation or EV Smart Charging follow the plan (see [Charging the car](#charging-the-car)).
+Add **EV Guest** under **Settings → Devices & services → Add integration**.
 
-If the online battery match is weak, set battery capacity manually and calculate again.
+| Setting | Description |
+| --- | --- |
+| Name | Device name, for example *EV Guest*. Each EV Guest needs its own name. |
+| Electricity price sensor | A sensor with hourly prices for today and tomorrow (see [supported price sensors](#supported-price-sensors)). It is checked during setup. |
+| Country | Country used for license plate lookup. Currently Denmark. |
+| MotorAPI API key | Optional. Needed only for license plate lookup. Get a free key at [motorapi.dk](https://www.motorapi.dk/): enter your email under *Få adgang nu* and the key arrives by email. |
+| Currency | Currency of the electricity prices, used for the charge cost. Defaults to your Home Assistant currency. |
 
-Inputs and the current plan are saved and survive a Home Assistant restart.
+After setup:
 
-# Entities
+- **Reconfigure** changes the price sensor, country or MotorAPI key.
+- **Configure** (options) changes the currency. Changes apply immediately, no restart needed.
+- If the MotorAPI key stops working, Home Assistant asks you for a new one.
 
-## Input/helper entities
-- License Plate
-- SoC
-- Battery Capacity
-- Charger Power
-- Charge Limit
-- Charge Completion Time
-- Use Charge Completion Time
-- Continuous Charging Preferred
-- Grab Car Data
-- Calculate
+## Usage
 
-## Result sensors
-- Charging Speed
-- Charge Start Time
-- Charge End Time
-- Charge Time
-- Charge Costs
-- Car Brand
-- Car Model
-- Car Variant
-- Car Battery Capacity
-- Status
-- Charge Now
+1. Enter the guest's **license plate** and press **Grab car data**. Check the brand, model and battery capacity. If the match is wrong, set the battery capacity yourself.
+2. Set the car's current **SoC**, the **charge limit**, the **charger power** and the **charge completion time**.
+3. Press **Calculate**. The status changes to *Planned* and the start, end, duration and cost appear.
+4. Let an automation or EV Smart Charging follow the plan (see [Charging the car](#charging-the-car)).
 
-### Charge Now
-`binary_sensor.charge_now` is on exactly while the current time is inside a planned charging segment and off otherwise, to the minute (a plan ending at 03:20 turns off at 03:20). It is intended for automations, dashboards and external charger logic.
+Inputs and the current plan are stored and survive a restart. Press **Calculate** again for the next guest.
+
+## Entities
+
+| Entity | Type | Description |
+| --- | --- | --- |
+| License plate | Text | The guest car's plate. |
+| SoC (State of Charge) | Number (%) | The car's charge level now. |
+| Charge limit | Number (%) | The charge level to reach. |
+| Battery capacity | Number (kWh) | Filled in by the lookup, or set it yourself. |
+| Charger power | Number (kW) | The charging power of your charger. |
+| Charge completion time | Time | When the car must be charged. |
+| Use charge completion time | Switch | Off: plan freely within the next 48 hours of prices. |
+| Continuous charging preferred | Switch | On: one block. Off: the cheapest hours, split if cheaper. |
+| Grab car data | Button | Look up the car from the plate. |
+| Calculate | Button | Make a new plan. |
+| Charge now | Binary sensor | On exactly while the plan says charge. |
+| Status | Sensor (enum) | *Ready*, *Planned*, *Charging*, *Completed*, or why the last calculation failed. |
+| Charge start time / Charge end time | Sensor (timestamp) | Start of the first and end of the last charging period. |
+| Charge time | Sensor (duration) | Total charging time. |
+| Charge costs | Sensor (monetary) | Expected cost of the plan. |
+| Charging speed | Sensor (%/h) | Charge level gained per hour, e.g. for EV Smart Charging. |
+| Car brand / model / variant / battery capacity | Sensor (diagnostic) | Result of the lookup. |
 
 ### Status attributes
-- `charging_segments`: the exact planned intervals (`start`/`end`)
-- `charging_schedule`: the same plan per hour, for graphs together with `raw_two_days`
-- `plan_locked`: `true` once the plan has started (see [Live SoC](#live-soc))
-- `plan_mode`: `continuous` or `split`
 
-### Split charging
-With **Continuous Charging Preferred** off, EV Guest picks the cheapest hours anywhere before the completion time. Full hours go to the cheapest hours and a remaining part-hour goes to the next-cheapest hour. A part-hour next to another charging hour is placed so the two join up.
+| Attribute | Description |
+| --- | --- |
+| `charging_segments` | The exact planned periods as `start`/`end`. |
+| `charging_schedule` | The plan per hour (1 = charging), aligned with `raw_two_days`, for graphs. |
+| `raw_two_days` | The prices used, for graphs. |
+| `plan_mode` | `continuous` or `split`. |
+| `plan_locked` | `true` once the plan has started. |
+| `last_calculation`, `last_lookup`, `vin`, `model_year`, `fuel_type`, `match_score` | Details of the last calculation and lookup. |
 
-# Charging the car
+## Actions
 
-EV Guest does not control a charger. Use one of these:
+| Action | Description |
+| --- | --- |
+| `ev_guest.grab_car_data` | Look up the car from the license plate. |
+| `ev_guest.calculate` | Make a new charging plan. |
 
-### Simple automation
-Turn the charger on when `binary_sensor.ev_guest_charge_now` turns on and off when it turns off.
+Both take an optional `config_entry_id`; it can be left out when you have only one EV Guest. When an action fails, Home Assistant shows why, for example *Enter a license plate first*.
 
-### EV Smart Charging
-[EV Smart Charging](https://github.com/jonasbkarlsson/ev_smart_charging) accepts any entity with a value from 0 to 100 as SoC, so a dedicated EV Smart Charging instance for guest cars can use EV Guest directly:
+```yaml
+action: ev_guest.calculate
+```
+
+## Charging the car
+
+### With an automation
+
+```yaml
+automation:
+  - alias: Guest charging follows EV Guest
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ev_guest_charge_now
+    actions:
+      - action: >-
+          switch.turn_{{ 'on' if trigger.to_state.state == 'on' else 'off' }}
+        target:
+          entity_id: switch.my_charger
+```
+
+### With EV Smart Charging
+
+[EV Smart Charging](https://github.com/jonasbkarlsson/ev_smart_charging) accepts any entity with a value from 0 to 100 as SoC, so an EV Smart Charging entry for guest cars can read EV Guest directly:
+
 - **EV SOC entity**: `number.ev_guest_soc_state_of_charge`
 - **EV target SOC entity**: `number.ev_guest_charge_limit`
-- **Charger control entity**: the charger's own switch (a guest car is not in Home Assistant)
+- **Charger control entity**: your charger's switch (a guest car is not in Home Assistant)
 
-Charging speed and completion time live inside EV Smart Charging. Copy them with an automation:
-- `sensor.ev_guest_charging_speed` (%/h) → `number.ev_smart_charging_charging_speed`
-- the completion time (whole hours) → `select.ev_smart_charging_charge_completion_time`
+Charging speed and completion time are settings inside EV Smart Charging. Copy them with an automation: `sensor.ev_guest_charging_speed` (%/h) → `number.ev_smart_charging_charging_speed`, and the completion time (whole hours) → `select.ev_smart_charging_charge_completion_time`. EV Smart Charging then makes its own plan; EV Guest's plan is a preview.
 
-EV Smart Charging then makes its own plan from the same inputs. EV Guest's plan is a preview in that setup.
+## Live SoC
 
-# Live SoC
+EV Guest only knows the SoC you enter; it never sees the car's charge level while charging.
 
-EV Guest only knows the SoC you enter. It never sees the car's live SoC while it charges.
+- **EV Guest locks a plan once it starts.** New prices can move a plan that has not started (for example when tomorrow's prices arrive), but never a running or finished plan – otherwise a fixed start SoC would make the plan slide forward and charge twice. Press **Calculate** to plan again.
+- **EV Smart Charging** does not rebuild its schedule while the SoC stays the same after charging has started, so a fixed start SoC works there too. If Home Assistant restarts while charging, EV Smart Charging plans again from the start SoC; the car's own charge limit is the safety net.
 
-- **EV Guest's own plan is locked once it starts.** Price updates can move a plan that has not started yet (for example when tomorrow's prices arrive), but never a plan that is running or finished. Otherwise a static start SoC would make the plan slide forward and charge the same energy twice. Press **Calculate** to make a new plan for the next guest.
-- **EV Smart Charging** does not rebuild its schedule while the SoC stays unchanged after charging has started, so a static start SoC works there too. One caveat: if Home Assistant restarts in the middle of charging, EV Smart Charging plans again from the start SoC. The car's own charge limit is the safety net.
+## How data is updated
 
-# Supported electricity price sensors
+EV Guest does not poll. It updates when:
 
-EV Guest works with sensors exposing hourly prices in one of these layouts:
-- `raw_today` / `raw_tomorrow` with `hour` + `price`
-- `today` / `tomorrow` hourly arrays
-- `forecast` with `hour` + `price`
+- you change an input or press a button,
+- the price sensor changes – after your first **Calculate**, and only until the plan starts,
+- a planned charging period starts or ends (to the second).
 
-The example sensor `sensor.energi_data_service` fits this pattern.
+The license plate lookup only contacts MotorAPI, NHTSA and Open EV Data when you press **Grab car data**.
 
-# Vehicle lookup providers
+## Supported price sensors
 
-Currently supported:
-- Country: Denmark
-- Default provider: MotorAPI Denmark
+Any sensor exposing hourly prices in one of these layouts:
 
-The code is structured so additional countries and providers can be added later through pull requests without changing the stable entity model.
+- `raw_today` / `raw_tomorrow` (or `forecast`) lists with `hour` and `price` – e.g. **Energi Data Service**, **Nord Pool** (HACS)
+- `today` / `tomorrow` lists of hourly prices from midnight
 
-# Data update behavior
+## Known limitations
 
-After you press **Calculate**, EV Guest listens for state changes on the selected electricity-price sensor and recalculates until the plan starts. Prices are expected per hour.
+- Prices are used per hour. Sensors with 15-minute prices are not supported yet.
+- License plate lookup supports Denmark only.
+- The battery match from Open EV Data is a best guess; check it, especially for rare variants.
+- Charging is assumed to run at the set charger power the whole time; real cars slow down near full.
+- EV Guest does not see the car's live charge level (see [Live SoC](#live-soc)).
 
-# Legal information
+## Troubleshooting
 
-EV Guest is not affiliated with, endorsed by, or maintained by Home Assistant, MotorAPI, NHTSA, or Open EV Data.
+| Problem | What to do |
+| --- | --- |
+| *The sensor has no hourly prices EV Guest can read* during setup | Choose the price sensor itself, not a template showing only the current price. Check that it has `raw_today` or `today` attributes. |
+| Status *Waiting for prices* | Not enough prices are known before the completion time yet. EV Guest calculates again when new prices arrive (usually after 13:00). |
+| Status *No charging window* | The car needs more time than there is before the completion time. Raise the charger power, lower the charge limit or move the completion time. |
+| A repair says the price sensor is missing | Use **Reconfigure** on the EV Guest integration to choose another sensor. |
+| *Grab car data* says a MotorAPI key is needed | Add a key under **Reconfigure**, or set the battery capacity yourself. |
+| Car sensors are unavailable | The last lookup could not reach MotorAPI. Try again later. |
 
-Third-party sources used:
-- MotorAPI for Danish license plate and VIN lookup
-- NHTSA vPIC for VIN decoding fallback
-- Open EV Data for battery matching
+For bug reports, attach the diagnostics (**Settings → Devices & services → EV Guest → ⋮ → Download diagnostics**). License plate, VIN and API key are removed automatically.
 
-License plates, VINs, and derived vehicle metadata may be sent to external services while lookups are performed. Users are responsible for their own API keys and third-party service usage.
+## Removal
 
-# Removal
+1. Go to **Settings → Devices & services → EV Guest**, open the menu and choose **Delete**. Stored inputs and plans are removed too.
+2. Optionally remove EV Guest in HACS and restart Home Assistant.
 
-To remove EV Guest:
-- Go to Settings → Devices & Services
-- Open EV Guest
-- Choose Delete
-- Restart Home Assistant if you installed it manually and want to remove the files from `custom_components`
+## Legal
+
+EV Guest is not affiliated with, endorsed by, or maintained by Home Assistant, MotorAPI, NHTSA or Open EV Data. License plates, VINs and derived vehicle data are sent to MotorAPI, NHTSA and Open EV Data when you press **Grab car data**. You are responsible for your own API key and use of these services.
 
 [releases-shield]: https://img.shields.io/github/v/release/Dinnsen/EV-Guest?style=for-the-badge
 [download-all-shield]: https://img.shields.io/github/downloads/Dinnsen/EV-Guest/total?style=for-the-badge
-[hacs-shield]: https://img.shields.io/badge/HACS-Custom-blue.svg?style=for-the-badge
+[hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
+[tests-shield]: https://img.shields.io/github/actions/workflow/status/Dinnsen/EV-Guest/tests.yml?branch=main&label=tests&style=for-the-badge
+[hassfest-shield]: https://img.shields.io/github/actions/workflow/status/Dinnsen/EV-Guest/hassfest.yml?branch=main&label=hassfest&style=for-the-badge
+[validate-shield]: https://img.shields.io/github/actions/workflow/status/Dinnsen/EV-Guest/validate.yml?branch=main&label=HACS&style=for-the-badge
 [buymecoffee-shield]: https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?style=for-the-badge
 [releases]: https://github.com/Dinnsen/EV-Guest/releases
 [hacs]: https://github.com/hacs/integration
+[tests]: https://github.com/Dinnsen/EV-Guest/actions/workflows/tests.yml
+[hassfest]: https://github.com/Dinnsen/EV-Guest/actions/workflows/hassfest.yml
+[validate]: https://github.com/Dinnsen/EV-Guest/actions/workflows/validate.yml
 [buymecoffee]: https://buymeacoffee.com/dinnsen
+[my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
+[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=Dinnsen&repository=EV-Guest&category=integration
+[my-config-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
+[my-config]: https://my.home-assistant.io/redirect/config_flow_start/?domain=ev_guest

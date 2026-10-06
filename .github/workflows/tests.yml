@@ -26,15 +26,18 @@ jobs:
         run: pip install -r requirements_test.txt
 
       - name: Run tests
+        id: pytest
         run: |
           set -o pipefail
           pytest --cov --cov-report=term-missing --cov-fail-under=95 -rfE --tb=short 2>&1 | tee pytest.txt
 
       - name: Report failures and coverage
         if: always()
+        env:
+          PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
         run: |
           python - <<'PY'
-          import pathlib, re
+          import os, pathlib, re
           path = pathlib.Path("pytest.txt")
           text = path.read_text() if path.exists() else ""
           total = re.search(r"^TOTAL.*?(\d+%)$", text, re.M)
@@ -46,7 +49,10 @@ jobs:
           summary = text[text.find("short test summary"):] if "short test summary" in text else ""
           marker = next((m for m in ("= ERRORS =", "= FAILURES =") if m in text), None)
           failures = text[text.find(marker):] if marker else ""
-          tail = "" if (failures or summary) else text[-4000:]
+          failed = os.environ.get("PYTEST_OUTCOME") == "failure"
+          if not failed:
+              failures = summary = ""
+          tail = text[-4000:] if failed and not (failures or summary) else ""
           for title, body in (("Failures", failures), ("Summary", summary), ("Output", tail)):
               for i in range(0, min(len(body), 24000), 4000):
                   chunk = body[i:i + 4000].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
