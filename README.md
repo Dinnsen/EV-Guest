@@ -141,7 +141,7 @@ action: ev_guest.calculate
 
 ## Dashboard
 
-<!-- SCREENSHOT -->
+![EV Guest dashboard example](docs/screenshots/dashboard.png)
 
 [`docs/dashboard/ev_guest_dashboard.yaml`](docs/dashboard/ev_guest_dashboard.yaml) is a ready-made dashboard: license plate lookup, car data, inputs, the charging plan and a two-day price graph with the planned charging hours.
 
