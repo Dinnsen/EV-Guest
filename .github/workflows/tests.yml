@@ -40,6 +40,9 @@ jobs:
           total = re.search(r"^TOTAL.*?(\d+%)$", text, re.M)
           if total:
               print(f"::notice title=Coverage::{total.group(1)}")
+          if "coverage:" in text and total:
+              table = text[text.find("coverage:"):total.end()]
+              print("::notice title=Coverage report::" + table[-4000:].replace("%", "%25").replace("\n", "%0A"))
           summary = text[text.find("short test summary"):] if "short test summary" in text else ""
           marker = next((m for m in ("= ERRORS =", "= FAILURES =") if m in text), None)
           failures = text[text.find(marker):] if marker else ""
