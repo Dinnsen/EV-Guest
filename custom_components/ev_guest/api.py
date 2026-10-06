@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 import logging
 import re
-from difflib import SequenceMatcher
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
@@ -203,7 +203,9 @@ async def async_lookup_vehicle_motorapi(session: ClientSession, plate: str, api_
     )
 
 
-async def async_decode_vin_nhtsa(session: ClientSession, vin: str, model_year: int | None = None) -> VehicleLookupResult | None:
+async def async_decode_vin_nhtsa(
+    session: ClientSession, vin: str, model_year: int | None = None
+) -> VehicleLookupResult | None:
     """Decode a VIN using NHTSA vPIC."""
     vin = clean_identifier(vin)
     if not vin:
@@ -338,7 +340,9 @@ def _extract_candidates(node: Any, inherited_brand: str | None = None) -> list[d
     return items
 
 
-def _score_candidate(candidate: dict[str, Any], brand: str | None, model: str | None, variant: str | None, model_year: int | None) -> float:
+def _score_candidate(
+    candidate: dict[str, Any], brand: str | None, model: str | None, variant: str | None, model_year: int | None
+) -> float:
     score = 0.0
     cand_brand = normalize_text(candidate.get("brand"))
     cand_model = normalize_text(candidate.get("model"))

@@ -6,15 +6,15 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 import logging
 from math import ceil
-from typing import Any
+from typing import Any, NoReturn
 
-from aiohttp import ClientSession
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError
+from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError, HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_point_in_time, async_track_state_change_event
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -32,29 +32,34 @@ from .api import (
 from .const import (
     ATTR_CHARGING_SCHEDULE,
     ATTR_CHARGING_SEGMENTS,
-    ATTR_COUNTRY,
     ATTR_FUEL_TYPE,
     ATTR_LAST_CALCULATION,
     ATTR_LAST_LOOKUP,
     ATTR_LAST_SOURCE,
     ATTR_MATCH_SCORE,
     ATTR_MODEL_YEAR,
-    ATTR_PLAN_LOCKED,
     ATTR_PLAN_MODE,
-    ATTR_PLATE_PROVIDER,
     ATTR_RAW_TWO_DAYS,
     ATTR_VIN,
     CONF_COUNTRY,
     CONF_CURRENCY,
-    CONF_DURATION_FORMAT,
     CONF_MOTORAPI_KEY,
     CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
-    CONF_TIME_FORMAT,
+    DEFAULT_COMPLETION_TIME,
     DEFAULT_COUNTRY,
-    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_CURRENCY,
     DOMAIN,
-    DURATION_FORMAT_HM,
+    ERROR_INVALID_API_KEY,
+    ERROR_INVALID_INPUT,
+    ERROR_LICENSE_PLATE_REQUIRED,
+    ERROR_LIMIT_NOT_ABOVE_SOC,
+    ERROR_LOOKUP_FAILED,
+    ERROR_MOTORAPI_KEY_MISSING,
+    ERROR_NO_PRICE_DATA,
+    ERROR_NO_WINDOW,
+    ERROR_NOT_ENOUGH_PRICES,
+    ERROR_VEHICLE_NOT_FOUND,
     INPUT_BATTERY_CAPACITY,
     INPUT_CHARGE_COMPLETION_TIME,
     INPUT_CHARGE_LIMIT,
@@ -63,22 +68,35 @@ from .const import (
     INPUT_LICENSE_PLATE,
     INPUT_SOC,
     INPUT_USE_COMPLETION_TIME,
+    ISSUE_PRICE_ENTITY_MISSING,
     RESULT_CAR_BATTERY_CAPACITY,
     RESULT_CAR_BRAND,
     RESULT_CAR_MODEL,
     RESULT_CAR_VARIANT,
     RESULT_CHARGE_COSTS,
-    RESULT_CHARGE_END_TIME,
-    RESULT_CHARGE_START_TIME,
     RESULT_CHARGE_TIME,
     RESULT_CHARGING_SPEED,
-    RESULT_STATUS,
+    STATUS_CHARGING,
+    STATUS_COMPLETED,
+    STATUS_PLANNED,
+    STATUS_READY,
     STORAGE_KEY,
     STORAGE_VERSION,
-    TIME_FORMAT_12H,
 )
+from .prices import PriceSlot, extract_price_slots
 
 _LOGGER = logging.getLogger(__name__)
+
+type EVGuestConfigEntry = ConfigEntry[EVGuestCoordinator]
+type Segment = dict[str, datetime]
+
+
+class PlanError(Exception):
+    """A charging plan could not be made; ``key`` is a status/translation key."""
+
+    def __init__(self, key: str) -> None:
+        super().__init__(key)
+        self.key = key
 
 
 @dataclass(slots=True)
@@ -91,33 +109,36 @@ class EVGuestData:
 
 
 class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
-    """Central state holder and calculator."""
+    """Central state holder and calculator.
 
-    config_entry: ConfigEntry
+    EV Guest does not poll anything: it reacts to price sensor updates, user
+    input and the start/end of planned charging segments.
+    """
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    config_entry: EVGuestConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: EVGuestConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=f"{DOMAIN}_{entry.entry_id}",
-            update_interval=DEFAULT_SCAN_INTERVAL,
+            update_interval=None,
         )
-        self.hass = hass
-        self.config_entry = entry
-        self.session: ClientSession = async_get_clientsession(hass)
-        self._remove_price_listener: CALLBACK_TYPE | None = None
+        self.session = async_get_clientsession(hass)
+        self._unsub: list[CALLBACK_TYPE] = []
         self._availability_logged: dict[str, bool] = {}
         self._boundary_callbacks: list[CALLBACK_TYPE] = []
-        # Planned charging intervals as (start, end) datetimes. This is the
-        # source of truth for charge_now; charging_schedule is hourly and only
-        # meant for graphs.
-        self._plan_segments: list[dict[str, datetime]] = []
+        # Planned charging intervals. This is the source of truth for
+        # charge_now and the plan sensors; charging_schedule is per hour and
+        # only meant for graphs.
+        self._plan_segments: list[Segment] = []
         # Automatic recalculation on price updates is only allowed after the
         # user has requested a calculation, and only until the plan starts.
         self._auto_recalculate = False
-        self._store: Store[dict[str, Any]] = Store(
-            hass, STORAGE_VERSION, STORAGE_KEY.format(entry_id=entry.entry_id)
-        )
+        self._error: str | None = None
+        self._error_detail: str | None = None
+        self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY.format(entry_id=entry.entry_id))
         self.data = EVGuestData(
             inputs={
                 INPUT_LICENSE_PLATE: "",
@@ -125,21 +146,18 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 INPUT_BATTERY_CAPACITY: 77.0,
                 INPUT_CHARGER_POWER: 11.0,
                 INPUT_CHARGE_LIMIT: 80.0,
-                INPUT_CHARGE_COMPLETION_TIME: "07:00",
+                INPUT_CHARGE_COMPLETION_TIME: DEFAULT_COMPLETION_TIME,
                 INPUT_USE_COMPLETION_TIME: True,
                 INPUT_CONTINUOUS_CHARGING_PREFERRED: True,
             },
             results={
                 RESULT_CHARGING_SPEED: None,
-                RESULT_CHARGE_START_TIME: None,
-                RESULT_CHARGE_END_TIME: None,
                 RESULT_CHARGE_TIME: None,
                 RESULT_CHARGE_COSTS: None,
                 RESULT_CAR_BRAND: None,
                 RESULT_CAR_MODEL: None,
                 RESULT_CAR_VARIANT: None,
                 RESULT_CAR_BATTERY_CAPACITY: None,
-                RESULT_STATUS: "Ready",
                 ATTR_LAST_LOOKUP: None,
                 ATTR_LAST_CALCULATION: None,
                 ATTR_LAST_SOURCE: None,
@@ -151,19 +169,24 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 ATTR_RAW_TWO_DAYS: [],
                 ATTR_PLAN_MODE: "continuous",
                 ATTR_CHARGING_SEGMENTS: [],
-                ATTR_COUNTRY: self.config.get(CONF_COUNTRY, DEFAULT_COUNTRY),
-                ATTR_PLATE_PROVIDER: self.plate_provider,
             },
             service_health={"motorapi": True, "nhtsa": True, "open_ev_data": True},
         )
+
+    # ------------------------------------------------------------------
+    # Configuration
 
     @property
     def config(self) -> dict[str, Any]:
         return {**self.config_entry.data, **self.config_entry.options}
 
     @property
+    def price_entity(self) -> str:
+        return self.config[CONF_PRICE_ENTITY]
+
+    @property
     def currency(self) -> str:
-        return self.config.get(CONF_CURRENCY, "DKK")
+        return self.config.get(CONF_CURRENCY) or self.hass.config.currency or DEFAULT_CURRENCY
 
     @property
     def country(self) -> str:
@@ -177,18 +200,14 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     def has_motorapi_key(self) -> bool:
         return bool(str(self.config.get(CONF_MOTORAPI_KEY) or "").strip())
 
+    # ------------------------------------------------------------------
+    # Lifecycle
+
     async def async_initialize(self) -> None:
         await self._async_validate_setup()
         await self._async_load_state()
-        parsed_time = self._parse_completion_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME))
-        if parsed_time is not None:
-            self.data.inputs[INPUT_CHARGE_COMPLETION_TIME] = self._format_time_for_input(parsed_time)
-        price_entity = self.config[CONF_PRICE_ENTITY]
-        self._remove_price_listener = async_track_state_change_event(
-            self.hass,
-            [price_entity],
-            self._handle_price_update,
-        )
+        self._unsub.append(async_track_state_change_event(self.hass, [self.price_entity], self._handle_price_update))
+        self._unsub.append(async_at_started(self.hass, self._async_check_price_entity))
         self._schedule_plan_boundaries()
         await self.async_refresh()
 
@@ -210,29 +229,51 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             )
             self._set_service_health("motorapi", True)
         except EVGuestAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
+            raise ConfigEntryAuthFailed(translation_domain=DOMAIN, translation_key="invalid_api_key") from err
         except EVGuestLookupError as err:
             if str(err) == "unsupported_provider":
-                raise ConfigEntryError(str(err)) from err
+                raise ConfigEntryError(translation_domain=DOMAIN, translation_key="unsupported_provider") from err
             _LOGGER.warning("Could not validate MotorAPI key during setup: %s", err)
             self._set_service_health("motorapi", False)
 
     async def async_shutdown(self) -> None:
-        if self._remove_price_listener:
-            self._remove_price_listener()
-            self._remove_price_listener = None
+        while self._unsub:
+            self._unsub.pop()()
         self._cancel_plan_boundaries()
-
-    @callback
-    def _handle_price_update(self, event: Event) -> None:
-        if not self._auto_recalculate or self.is_plan_locked():
-            return
-        self.hass.async_create_task(self.async_calculate(manual=False))
+        await super().async_shutdown()
 
     async def _async_update_data(self) -> EVGuestData:
-        self.data.results[ATTR_COUNTRY] = self.country
-        self.data.results[ATTR_PLATE_PROVIDER] = self.plate_provider
         return self.data
+
+    @callback
+    def _async_check_price_entity(self, _hass: HomeAssistant | None = None) -> None:
+        """Raise or clear a repair issue for a missing price sensor."""
+        issue_id = f"{ISSUE_PRICE_ENTITY_MISSING}_{self.config_entry.entry_id}"
+        if self.hass.states.get(self.price_entity) is None:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key=ISSUE_PRICE_ENTITY_MISSING,
+                translation_placeholders={
+                    "entity_id": self.price_entity,
+                    "title": self.config_entry.title,
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+
+    @callback
+    def _handle_price_update(self, event: Event[EventStateChangedData]) -> None:
+        if event.data["new_state"] is not None:
+            self._async_check_price_entity()
+        if not self._auto_recalculate or self.is_plan_locked():
+            return
+        self.config_entry.async_create_background_task(
+            self.hass, self.async_calculate(manual=False), f"{DOMAIN} recalculate"
+        )
 
     # ------------------------------------------------------------------
     # Persistence
@@ -247,7 +288,13 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         for key, value in (stored.get("results") or {}).items():
             if key in self.data.results:
                 self.data.results[key] = value
-        self._plan_segments = self._parse_segments(stored.get("segments") or [])
+        # 0.7.x stored the completion time as text (possibly 12h) and the
+        # charge time as text when "hours_minutes" was selected.
+        completion = parse_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME))
+        self.data.inputs[INPUT_CHARGE_COMPLETION_TIME] = format_time(completion or parse_time(DEFAULT_COMPLETION_TIME))
+        if not isinstance(self.data.results.get(RESULT_CHARGE_TIME), int | float):
+            self.data.results[RESULT_CHARGE_TIME] = None
+        self._plan_segments = parse_segments(stored.get("segments") or [])
         self._auto_recalculate = bool(stored.get("auto_recalculate", False))
 
     @callback
@@ -259,63 +306,59 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         return {
             "inputs": dict(self.data.inputs),
             "results": dict(self.data.results),
-            "segments": self._serialize_segments(self._plan_segments),
+            "segments": serialize_segments(self._plan_segments),
             "auto_recalculate": self._auto_recalculate,
         }
 
-    @staticmethod
-    def _serialize_segments(segments: list[dict[str, datetime]]) -> list[dict[str, str]]:
-        return [
-            {"start": segment["start"].isoformat(), "end": segment["end"].isoformat()}
-            for segment in segments
-        ]
-
-    @staticmethod
-    def _parse_segments(raw: list[Any]) -> list[dict[str, datetime]]:
-        segments: list[dict[str, datetime]] = []
-        for item in raw:
-            if not isinstance(item, dict):
-                continue
-            start = dt_util.parse_datetime(str(item.get("start", "")))
-            end = dt_util.parse_datetime(str(item.get("end", "")))
-            if start is None or end is None or end <= start:
-                continue
-            segments.append({"start": start, "end": end})
-        return sorted(segments, key=lambda seg: seg["start"])
+    # ------------------------------------------------------------------
+    # Inputs
 
     async def async_set_input_value(self, key: str, value: Any) -> None:
         if key == INPUT_CHARGE_COMPLETION_TIME:
-            parsed = self._parse_completion_time(value)
-            if parsed is None:
-                self.data.results[RESULT_STATUS] = "Invalid completion time"
-                self.async_update_listeners()
-                return
-            value = self._format_time_for_input(parsed)
+            value = format_time(value) if isinstance(value, time) else format_time(parse_time(value))
         self.data.inputs[key] = value
         self._async_save_state()
         self.async_update_listeners()
 
-    def get_completion_time_text(self) -> str:
-        parsed = self._parse_completion_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME, "07:00"))
-        return self._format_time_for_input(parsed or time(hour=7, minute=0))
+    @property
+    def completion_time(self) -> time:
+        return parse_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME)) or parse_time(DEFAULT_COMPLETION_TIME)
 
-    def _format_time_for_input(self, value: time) -> str:
-        if self.config.get(CONF_TIME_FORMAT) == TIME_FORMAT_12H:
-            return value.strftime("%I:%M %p").lstrip("0")
-        return value.strftime("%H:%M")
+    # ------------------------------------------------------------------
+    # Status
 
-    def _parse_completion_time(self, value: Any) -> time | None:
-        if isinstance(value, time):
-            return value
-        if value is None:
-            return None
-        text = str(value).strip()
-        for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p"):
-            try:
-                return datetime.strptime(text, fmt).time()
-            except ValueError:
-                continue
-        return None
+    @property
+    def error(self) -> str | None:
+        return self._error
+
+    @property
+    def error_detail(self) -> str | None:
+        return self._error_detail
+
+    @callback
+    def _set_error(self, key: str | None, detail: str | None = None) -> None:
+        self._error = key
+        self._error_detail = detail
+
+    def status(self, now: datetime | None = None) -> str:
+        if self._error:
+            return self._error
+        if not self._plan_segments:
+            return STATUS_READY
+        now = now or dt_util.now()
+        if self.is_charge_now(now):
+            return STATUS_CHARGING
+        if now >= self._plan_segments[-1]["end"]:
+            return STATUS_COMPLETED
+        return STATUS_PLANNED
+
+    @property
+    def plan_start(self) -> datetime | None:
+        return self._plan_segments[0]["start"] if self._plan_segments else None
+
+    @property
+    def plan_end(self) -> datetime | None:
+        return self._plan_segments[-1]["end"] if self._plan_segments else None
 
     def _set_service_health(self, service: str, available: bool) -> None:
         current = self.data.service_health.get(service)
@@ -329,16 +372,20 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             _LOGGER.info("%s is available again", service)
             self._availability_logged[service] = False
 
+    # ------------------------------------------------------------------
+    # Vehicle lookup
+
     async def async_lookup_car_data(self) -> None:
-        plate = self.data.inputs.get(INPUT_LICENSE_PLATE, "")
+        """Look up the guest car from its license plate.
+
+        Raises a translated error so the button press or action call shows
+        why it failed; the status sensor shows the same reason.
+        """
+        plate = str(self.data.inputs.get(INPUT_LICENSE_PLATE) or "").strip()
         if not plate:
-            self.data.results[RESULT_STATUS] = "License plate is required"
-            self.async_update_listeners()
-            return
+            self._fail(ERROR_LICENSE_PLATE_REQUIRED)
         if not self.has_motorapi_key:
-            self.data.results[RESULT_STATUS] = "MotorAPI API key not configured - enter battery capacity manually"
-            self.async_update_listeners()
-            return
+            self._fail(ERROR_MOTORAPI_KEY_MISSING)
 
         try:
             motor = await async_lookup_vehicle(
@@ -349,17 +396,16 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 self.plate_provider,
             )
             self._set_service_health("motorapi", True)
-        except EVGuestAuthError:
+        except EVGuestAuthError as err:
             self._set_service_health("motorapi", False)
-            self.data.results[RESULT_STATUS] = "Invalid MotorAPI API key"
             self.config_entry.async_start_reauth(self.hass)
-            self.async_update_listeners()
-            return
+            self._fail(ERROR_INVALID_API_KEY, cause=err)
         except EVGuestLookupError as err:
-            self._set_service_health("motorapi", False if str(err) in {"cannot_connect", "timeout"} else True)
-            self.data.results[RESULT_STATUS] = f"Lookup failed: {err}"
-            self.async_update_listeners()
-            return
+            reason = str(err)
+            self._set_service_health("motorapi", reason not in {"cannot_connect", "timeout"})
+            if reason == "vehicle_not_found":
+                self._fail(ERROR_VEHICLE_NOT_FOUND, cause=err)
+            self._fail(ERROR_LOOKUP_FAILED, detail=reason, cause=err, service_error=True)
 
         decoded = None
         if motor.vin:
@@ -389,17 +435,40 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 ATTR_FUEL_TYPE: normalized.fuel_type,
                 ATTR_MATCH_SCORE: battery.match_score,
                 ATTR_LAST_SOURCE: f"{normalized.source} + {battery.source}",
-                ATTR_LAST_LOOKUP: self._local_now().isoformat(),
+                ATTR_LAST_LOOKUP: dt_util.now().isoformat(),
             }
         )
         if battery.battery_capacity:
             self.data.inputs[INPUT_BATTERY_CAPACITY] = battery.battery_capacity
-        self.data.results[RESULT_STATUS] = "Car data updated"
         self._async_save_state()
         self.async_update_listeners()
 
-    def _merge_vehicle_results(
+    def _fail(
         self,
+        key: str,
+        *,
+        detail: str | None = None,
+        cause: Exception | None = None,
+        service_error: bool = False,
+        show_in_status: bool = False,
+    ) -> NoReturn:
+        """Raise ``key`` as a translated error.
+
+        Calculation errors are also shown on the status sensor. Lookup errors
+        are not, so a failed lookup never hides the state of an active plan.
+        """
+        if show_in_status:
+            self._set_error(key, detail)
+            self.async_update_listeners()
+        error_cls = HomeAssistantError if service_error else ServiceValidationError
+        raise error_cls(
+            translation_domain=DOMAIN,
+            translation_key=key,
+            translation_placeholders={"detail": detail} if detail else None,
+        ) from cause
+
+    @staticmethod
+    def _merge_vehicle_results(
         primary: VehicleLookupResult,
         fallback: VehicleLookupResult | None,
     ) -> VehicleLookupResult:
@@ -415,14 +484,18 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             raw=primary.raw,
         )
 
+    # ------------------------------------------------------------------
+    # Planning
+
     async def async_calculate(self, manual: bool = True) -> None:
         """Calculate the cheapest charging plan.
 
         EV Guest only knows the SoC at the time of calculation, it never sees
         the car's live SoC. A plan is therefore locked once it has started:
         automatic recalculations (price updates) are skipped from then on, so
-        a static start SoC can never make the plan slide or repeat. Pressing
-        Calculate always makes a fresh plan.
+        a static start SoC can never make the plan slide or repeat. A manual
+        calculation always makes a fresh plan and raises a translated error
+        when no plan can be made.
         """
         if manual:
             self._auto_recalculate = True
@@ -431,44 +504,40 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
 
         try:
             calculation = self._calculate_schedule()
-        except ValueError as err:
-            self.data.results[RESULT_STATUS] = str(err)
+        except PlanError as err:
             if manual:
                 # Do not keep following an old plan the user tried to replace.
                 self._set_plan([])
-            self._async_save_state()
-            self.async_update_listeners()
+                self._async_save_state()
+                self._fail(err.key, cause=err, show_in_status=True)
+            if not self._plan_segments:
+                self._set_error(err.key)
+                self.async_update_listeners()
             return
 
         segments = calculation.pop("plan_segments")
         self.data.results.update(calculation)
-        self.data.results[ATTR_LAST_CALCULATION] = self._local_now().isoformat()
-        self.data.results[RESULT_STATUS] = "Calculation ready"
+        self.data.results[ATTR_LAST_CALCULATION] = dt_util.now().isoformat()
+        self._set_error(None)
         self._set_plan(segments)
         self._async_save_state()
         self.async_update_listeners()
 
     def _calculate_schedule(self) -> dict[str, Any]:
-        soc = float(self.data.inputs[INPUT_SOC])
-        battery_capacity = float(self.data.inputs[INPUT_BATTERY_CAPACITY])
-        charger_power = float(self.data.inputs[INPUT_CHARGER_POWER])
-        charge_limit = float(self.data.inputs[INPUT_CHARGE_LIMIT])
+        try:
+            soc = float(self.data.inputs[INPUT_SOC])
+            battery_capacity = float(self.data.inputs[INPUT_BATTERY_CAPACITY])
+            charger_power = float(self.data.inputs[INPUT_CHARGER_POWER])
+            charge_limit = float(self.data.inputs[INPUT_CHARGE_LIMIT])
+        except (TypeError, ValueError) as err:
+            raise PlanError(ERROR_INVALID_INPUT) from err
         use_completion_time = bool(self.data.inputs.get(INPUT_USE_COMPLETION_TIME, True))
-        completion_time = self._parse_completion_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME))
         continuous = bool(self.data.inputs.get(INPUT_CONTINUOUS_CHARGING_PREFERRED, True))
 
-        if battery_capacity <= 0:
-            raise ValueError("Battery capacity must be above 0")
-        if charger_power <= 0:
-            raise ValueError("Charger power must be above 0")
-        if not 0 <= soc <= 100:
-            raise ValueError("SoC must be between 0 and 100")
-        if not 0 <= charge_limit <= 100:
-            raise ValueError("Charge limit must be between 0 and 100")
+        if battery_capacity <= 0 or charger_power <= 0 or not 0 <= soc <= 100 or not 0 <= charge_limit <= 100:
+            raise PlanError(ERROR_INVALID_INPUT)
         if charge_limit <= soc:
-            raise ValueError("Charge limit must be above current SoC")
-        if use_completion_time and completion_time is None:
-            raise ValueError("Completion time is invalid")
+            raise PlanError(ERROR_LIMIT_NOT_ABOVE_SOC)
 
         speed_pct_per_hour = (charger_power / battery_capacity) * 100
         energy_needed_kwh = battery_capacity * ((charge_limit - soc) / 100)
@@ -476,211 +545,56 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         required_hours = charge_minutes / 60
         hours_needed = ceil(required_hours)
 
-        prices = self._extract_price_slots()
+        now = dt_util.now()
+        prices = extract_price_slots(self.hass.states.get(self.price_entity), now)
         if not prices:
-            raise ValueError("No usable price data available from selected price sensor")
+            raise PlanError(ERROR_NO_PRICE_DATA)
 
         visible_prices = prices[:48]
         self.data.results[ATTR_RAW_TWO_DAYS] = [
-            {"start": dt.isoformat(), "value": price} for dt, price in visible_prices
+            {"start": start.isoformat(), "value": price} for start, price in visible_prices
         ]
 
-        now = self._local_now()
         planning_prices = prices if use_completion_time else visible_prices
         valid_prices = [slot for slot in planning_prices if now <= slot[0]]
         completion_dt = None
         if use_completion_time:
-            completion_dt = self._next_completion_datetime(now, completion_time)
+            completion_dt = next_completion_datetime(now, self.completion_time)
             valid_prices = [slot for slot in valid_prices if slot[0] < completion_dt]
-            if len(valid_prices) < hours_needed:
-                raise ValueError("Not enough future hourly prices available before completion time")
         if len(valid_prices) < hours_needed:
-            raise ValueError("Not enough future hourly prices available")
+            raise PlanError(ERROR_NOT_ENOUGH_PRICES)
 
         if continuous:
-            plan_segments, plan_cost = self._select_continuous_segments(
+            plan_segments, plan_cost = select_continuous_segments(
                 valid_prices, energy_needed_kwh, required_hours, charge_minutes, completion_dt
             )
             mode = "continuous"
         else:
-            plan_segments, plan_cost = self._select_discrete_segments(
-                valid_prices, energy_needed_kwh, required_hours, charge_minutes, completion_dt
+            plan_segments, plan_cost = select_split_segments(
+                valid_prices, energy_needed_kwh, required_hours, completion_dt
             )
             mode = "split"
 
         if not plan_segments:
-            raise ValueError("No valid charging window found")
+            raise PlanError(ERROR_NO_WINDOW)
 
-        self.data.results[ATTR_CHARGING_SCHEDULE] = self._segments_to_schedule(plan_segments, visible_prices)
+        self.data.results[ATTR_CHARGING_SCHEDULE] = segments_to_schedule(plan_segments, visible_prices)
         self.data.results[ATTR_PLAN_MODE] = mode
-        self.data.results[ATTR_COUNTRY] = self.country
-        self.data.results[ATTR_PLATE_PROVIDER] = self.plate_provider
-
-        start = min(segment["start"] for segment in plan_segments)
-        end = max(segment["end"] for segment in plan_segments)
 
         return {
             RESULT_CHARGING_SPEED: round(speed_pct_per_hour, 1),
-            RESULT_CHARGE_START_TIME: self._format_datetime(start),
-            RESULT_CHARGE_END_TIME: self._format_datetime(end),
-            RESULT_CHARGE_TIME: self._format_duration(charge_minutes),
+            RESULT_CHARGE_TIME: charge_minutes,
             RESULT_CHARGE_COSTS: round(plan_cost, 2),
             "plan_segments": plan_segments,
         }
-
-    def _extract_price_slots(self) -> list[tuple[datetime, float]]:
-        state = self.hass.states.get(self.config[CONF_PRICE_ENTITY])
-        if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            return []
-
-        slots: list[tuple[datetime, float]] = []
-        attrs = state.attributes
-
-        for key in ("raw_today", "raw_tomorrow", "forecast"):
-            for row in (attrs.get(key) or []):
-                if isinstance(row, dict) and row.get("hour") is not None and row.get("price") is not None:
-                    dt = dt_util.parse_datetime(str(row["hour"]))
-                    if dt is not None:
-                        slots.append((dt, float(row["price"])))
-
-        if not slots and isinstance(attrs.get("today"), list):
-            base = self._local_now().replace(hour=0, minute=0, second=0, microsecond=0)
-            for idx, price in enumerate(attrs["today"]):
-                slots.append((base + timedelta(hours=idx), float(price)))
-            if isinstance(attrs.get("tomorrow"), list):
-                next_base = base + timedelta(days=1)
-                for idx, price in enumerate(attrs["tomorrow"]):
-                    slots.append((next_base + timedelta(hours=idx), float(price)))
-
-        deduped: dict[str, tuple[datetime, float]] = {}
-        for dt, price in slots:
-            deduped[dt.isoformat()] = (dt, price)
-        return [deduped[key] for key in sorted(deduped.keys())]
-
-    def _select_continuous_segments(
-        self,
-        valid_prices: list[tuple[datetime, float]],
-        energy_needed_kwh: float,
-        required_hours: float,
-        charge_minutes: int,
-        completion_dt: datetime | None,
-    ) -> tuple[list[dict[str, Any]], float]:
-        hours_needed = ceil(required_hours)
-        cheapest_window = None
-        for index in range(0, len(valid_prices) - hours_needed + 1):
-            window = valid_prices[index : index + hours_needed]
-            if completion_dt and window[-1][0] + timedelta(hours=1) > completion_dt:
-                continue
-            cost = self._window_cost(window, energy_needed_kwh, required_hours)
-            if cheapest_window is None or cost < cheapest_window["cost"]:
-                cheapest_window = {
-                    "window": window,
-                    "cost": cost,
-                }
-
-        if cheapest_window is None:
-            return [], 0.0
-
-        start = cheapest_window["window"][0][0]
-        end = start + timedelta(minutes=charge_minutes)
-        return ([{"start": start, "end": end}], cheapest_window["cost"])
-
-    def _select_discrete_segments(
-        self,
-        valid_prices: list[tuple[datetime, float]],
-        energy_needed_kwh: float,
-        required_hours: float,
-        charge_minutes: int,
-        completion_dt: datetime | None,
-    ) -> tuple[list[dict[str, Any]], float]:
-        """Pick the cheapest hours, not necessarily adjacent.
-
-        Full hours go to the cheapest slots. A remaining partial hour goes to
-        the next-cheapest slot (the most expensive one chosen), which is the
-        cheapest possible split. Slots must end before the completion time.
-        """
-        candidates = valid_prices
-        if completion_dt:
-            candidates = [slot for slot in valid_prices if slot[0] + timedelta(hours=1) <= completion_dt]
-
-        hours_needed = ceil(required_hours)
-        if len(candidates) < hours_needed:
-            return [], 0.0
-
-        by_price = sorted(candidates, key=lambda item: (item[1], item[0]))[:hours_needed]
-        full_hours = int(required_hours)
-        fraction = required_hours - full_hours
-        energy_per_hour = energy_needed_kwh / required_hours
-
-        full_slots = by_price[:full_hours]
-        full_starts = {start for start, _price in full_slots}
-        total_cost = 0.0
-        segments: list[dict[str, Any]] = []
-        for start, price in full_slots:
-            segments.append({"start": start, "end": start + timedelta(hours=1)})
-            total_cost += price * energy_per_hour
-
-        if fraction > 1e-9:
-            start, price = by_price[full_hours]
-            duration = timedelta(hours=fraction)
-            slot_end = start + timedelta(hours=1)
-            if slot_end in full_starts:
-                # Place the partial charge at the end of its hour so it joins
-                # the following charging hour instead of leaving a gap.
-                segments.append({"start": slot_end - duration, "end": slot_end})
-            else:
-                segments.append({"start": start, "end": start + duration})
-            total_cost += price * energy_per_hour * fraction
-
-        return self._merge_segments(segments), total_cost
-
-    @staticmethod
-    def _merge_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        merged: list[dict[str, Any]] = []
-        for segment in sorted(segments, key=lambda seg: seg["start"]):
-            if merged and segment["start"] <= merged[-1]["end"]:
-                merged[-1]["end"] = max(merged[-1]["end"], segment["end"])
-            else:
-                merged.append({"start": segment["start"], "end": segment["end"]})
-        return merged
-
-    def _segments_to_schedule(
-        self,
-        plan_segments: list[dict[str, Any]],
-        price_slots: list[tuple[datetime, float]],
-    ) -> list[dict[str, Any]]:
-        output: list[dict[str, Any]] = []
-        for start, _price in price_slots:
-            end = start + timedelta(hours=1)
-            value = 0.0
-            for segment in plan_segments:
-                if segment["start"] < end and segment["end"] > start:
-                    value = 1.0
-                    break
-            output.append({"start": start.isoformat(), "value": value})
-        return output
-
-    def _window_cost(self, window: list[tuple[datetime, float]], energy_needed_kwh: float, required_hours: float) -> float:
-        if not window:
-            return 0.0
-        energy_per_hour = energy_needed_kwh / required_hours
-        remaining = required_hours
-        total = 0.0
-        for _, price in window:
-            if remaining <= 0:
-                break
-            fraction = min(1.0, remaining)
-            total += price * energy_per_hour * fraction
-            remaining -= fraction
-        return total
 
     # ------------------------------------------------------------------
     # Plan state and charge_now
 
     @callback
-    def _set_plan(self, segments: list[dict[str, Any]]) -> None:
+    def _set_plan(self, segments: list[Segment]) -> None:
         self._plan_segments = [{"start": seg["start"], "end": seg["end"]} for seg in segments]
-        self.data.results[ATTR_CHARGING_SEGMENTS] = self._serialize_segments(self._plan_segments)
+        self.data.results[ATTR_CHARGING_SEGMENTS] = serialize_segments(self._plan_segments)
         if not segments:
             self.data.results[ATTR_CHARGING_SCHEDULE] = []
         self._schedule_plan_boundaries()
@@ -689,7 +603,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     def _schedule_plan_boundaries(self) -> None:
         """Push a state update exactly when charge_now should change."""
         self._cancel_plan_boundaries()
-        now = self._local_now()
+        now = dt_util.now()
         for segment in self._plan_segments:
             for moment in (segment["start"], segment["end"]):
                 if moment > now:
@@ -700,8 +614,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     @callback
     def _cancel_plan_boundaries(self) -> None:
         while self._boundary_callbacks:
-            remove = self._boundary_callbacks.pop()
-            remove()
+            self._boundary_callbacks.pop()()
 
     @callback
     def _handle_plan_boundary(self, _now: datetime) -> None:
@@ -711,29 +624,160 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         """True once the current plan has started (also after it has finished)."""
         if not self._plan_segments:
             return False
-        now = now or self._local_now()
+        now = now or dt_util.now()
         return self._plan_segments[0]["start"] <= now
 
     def is_charge_now(self, now: datetime | None = None) -> bool:
-        now = now or self._local_now()
+        now = now or dt_util.now()
         return any(segment["start"] <= now < segment["end"] for segment in self._plan_segments)
 
-    def _local_now(self) -> datetime:
-        return dt_util.now()
 
-    def _next_completion_datetime(self, now: datetime, completion: time) -> datetime:
-        dt = now.replace(hour=completion.hour, minute=completion.minute, second=0, microsecond=0)
-        if dt <= now:
-            dt += timedelta(days=1)
-        return dt
+# ----------------------------------------------------------------------
+# Pure helpers (unit tested directly)
 
-    def _format_datetime(self, value: datetime) -> str:
-        if self.config.get(CONF_TIME_FORMAT) == TIME_FORMAT_12H:
-            return value.strftime("%I:%M %p").lstrip("0")
-        return value.strftime("%H:%M")
 
-    def _format_duration(self, minutes: int) -> str | int:
-        if self.config.get(CONF_DURATION_FORMAT) == DURATION_FORMAT_HM:
-            hours, rem = divmod(minutes, 60)
-            return f"{hours}h {rem}m"
-        return minutes
+def parse_time(value: Any) -> time | None:
+    if isinstance(value, time):
+        return value
+    if value is None:
+        return None
+    text = str(value).strip()
+    for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p"):
+        try:
+            return datetime.strptime(text, fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
+def format_time(value: time | None) -> str:
+    return (value or parse_time(DEFAULT_COMPLETION_TIME)).strftime("%H:%M")  # type: ignore[union-attr]
+
+
+def next_completion_datetime(now: datetime, completion: time) -> datetime:
+    result = now.replace(hour=completion.hour, minute=completion.minute, second=0, microsecond=0)
+    if result <= now:
+        result += timedelta(days=1)
+    return result
+
+
+def serialize_segments(segments: list[Segment]) -> list[dict[str, str]]:
+    return [{"start": seg["start"].isoformat(), "end": seg["end"].isoformat()} for seg in segments]
+
+
+def parse_segments(raw: list[Any]) -> list[Segment]:
+    segments: list[Segment] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        start = dt_util.parse_datetime(str(item.get("start", "")))
+        end = dt_util.parse_datetime(str(item.get("end", "")))
+        if start is None or end is None or end <= start:
+            continue
+        segments.append({"start": start, "end": end})
+    return sorted(segments, key=lambda seg: seg["start"])
+
+
+def _window_cost(window: list[PriceSlot], energy_needed_kwh: float, required_hours: float) -> float:
+    energy_per_hour = energy_needed_kwh / required_hours
+    remaining = required_hours
+    total = 0.0
+    for _start, price in window:
+        if remaining <= 0:
+            break
+        fraction = min(1.0, remaining)
+        total += price * energy_per_hour * fraction
+        remaining -= fraction
+    return total
+
+
+def select_continuous_segments(
+    valid_prices: list[PriceSlot],
+    energy_needed_kwh: float,
+    required_hours: float,
+    charge_minutes: int,
+    completion_dt: datetime | None,
+) -> tuple[list[Segment], float]:
+    """Cheapest single block of consecutive hours."""
+    hours_needed = ceil(required_hours)
+    best: tuple[list[PriceSlot], float] | None = None
+    for index in range(len(valid_prices) - hours_needed + 1):
+        window = valid_prices[index : index + hours_needed]
+        if completion_dt and window[-1][0] + timedelta(hours=1) > completion_dt:
+            continue
+        cost = _window_cost(window, energy_needed_kwh, required_hours)
+        if best is None or cost < best[1]:
+            best = (window, cost)
+
+    if best is None:
+        return [], 0.0
+    start = best[0][0][0]
+    return [{"start": start, "end": start + timedelta(minutes=charge_minutes)}], best[1]
+
+
+def select_split_segments(
+    valid_prices: list[PriceSlot],
+    energy_needed_kwh: float,
+    required_hours: float,
+    completion_dt: datetime | None,
+) -> tuple[list[Segment], float]:
+    """Cheapest hours, not necessarily adjacent.
+
+    Full hours go to the cheapest slots. A remaining partial hour goes to the
+    next-cheapest slot (the most expensive one chosen), which is the cheapest
+    possible split. Slots must end before the completion time.
+    """
+    candidates = valid_prices
+    if completion_dt:
+        candidates = [slot for slot in valid_prices if slot[0] + timedelta(hours=1) <= completion_dt]
+
+    hours_needed = ceil(required_hours)
+    if len(candidates) < hours_needed:
+        return [], 0.0
+
+    by_price = sorted(candidates, key=lambda item: (item[1], item[0]))[:hours_needed]
+    full_hours = int(required_hours)
+    fraction = required_hours - full_hours
+    energy_per_hour = energy_needed_kwh / required_hours
+
+    full_slots = by_price[:full_hours]
+    full_starts = {start for start, _price in full_slots}
+    total_cost = 0.0
+    segments: list[Segment] = []
+    for start, price in full_slots:
+        segments.append({"start": start, "end": start + timedelta(hours=1)})
+        total_cost += price * energy_per_hour
+
+    if fraction > 1e-9:
+        start, price = by_price[full_hours]
+        duration = timedelta(hours=fraction)
+        slot_end = start + timedelta(hours=1)
+        if slot_end in full_starts:
+            # Place the partial charge at the end of its hour so it joins the
+            # following charging hour instead of leaving a gap.
+            segments.append({"start": slot_end - duration, "end": slot_end})
+        else:
+            segments.append({"start": start, "end": start + duration})
+        total_cost += price * energy_per_hour * fraction
+
+    return merge_segments(segments), total_cost
+
+
+def merge_segments(segments: list[Segment]) -> list[Segment]:
+    merged: list[Segment] = []
+    for segment in sorted(segments, key=lambda seg: seg["start"]):
+        if merged and segment["start"] <= merged[-1]["end"]:
+            merged[-1]["end"] = max(merged[-1]["end"], segment["end"])
+        else:
+            merged.append({"start": segment["start"], "end": segment["end"]})
+    return merged
+
+
+def segments_to_schedule(segments: list[Segment], price_slots: list[PriceSlot]) -> list[dict[str, Any]]:
+    """Per-hour 0/1 view of the plan, aligned with raw_two_days, for graphs."""
+    output: list[dict[str, Any]] = []
+    for start, _price in price_slots:
+        end = start + timedelta(hours=1)
+        active = any(seg["start"] < end and seg["end"] > start for seg in segments)
+        output.append({"start": start.isoformat(), "value": 1.0 if active else 0.0})
+    return output

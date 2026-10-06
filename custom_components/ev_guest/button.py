@@ -2,38 +2,31 @@
 
 from __future__ import annotations
 
-from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import SERVICE_CALCULATE, SERVICE_GRAB_CAR_DATA
-from .entity import EVGuestCoordinatorEntity
+from .coordinator import EVGuestConfigEntry
+from .entity import EVGuestEntity
 
-PARALLEL_UPDATES = 0
-
-BUTTONS = (
-    ButtonEntityDescription(key=SERVICE_GRAB_CAR_DATA, icon="mdi:car-search"),
-    ButtonEntityDescription(key=SERVICE_CALCULATE, icon="mdi:calculator"),
-)
+PARALLEL_UPDATES = 1
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: EVGuestConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
     coordinator = entry.runtime_data
-    async_add_entities(EVGuestButton(coordinator, description) for description in BUTTONS)
+    async_add_entities(EVGuestButton(coordinator, key) for key in (SERVICE_GRAB_CAR_DATA, SERVICE_CALCULATE))
 
 
-class EVGuestButton(EVGuestCoordinatorEntity, ButtonEntity):
-    """EV Guest action button."""
-
-    entity_description: ButtonEntityDescription
-
-    def __init__(self, coordinator, description: ButtonEntityDescription) -> None:
-        super().__init__(coordinator, description.key)
-        self.entity_description = description
+class EVGuestButton(EVGuestEntity, ButtonEntity):
+    """Runs a lookup or a calculation."""
 
     async def async_press(self) -> None:
-        if self.entity_description.key == SERVICE_GRAB_CAR_DATA:
+        if self._key == SERVICE_GRAB_CAR_DATA:
             await self.coordinator.async_lookup_car_data()
         else:
             await self.coordinator.async_calculate()

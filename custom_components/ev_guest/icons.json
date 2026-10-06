@@ -1,0 +1,109 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "charge_now": {
+        "default": "mdi:power-plug-off-outline",
+        "state": {
+          "on": "mdi:ev-plug-type2"
+        }
+      }
+    },
+    "button": {
+      "grab_car_data": {
+        "default": "mdi:car-search"
+      },
+      "calculate": {
+        "default": "mdi:calculator"
+      }
+    },
+    "number": {
+      "soc": {
+        "default": "mdi:battery-50"
+      },
+      "charge_limit": {
+        "default": "mdi:battery-arrow-up"
+      },
+      "battery_capacity": {
+        "default": "mdi:car-battery"
+      },
+      "charger_power": {
+        "default": "mdi:ev-station"
+      }
+    },
+    "sensor": {
+      "charging_speed": {
+        "default": "mdi:speedometer"
+      },
+      "charge_start_time": {
+        "default": "mdi:clock-start"
+      },
+      "charge_end_time": {
+        "default": "mdi:clock-end"
+      },
+      "charge_time": {
+        "default": "mdi:timer-outline"
+      },
+      "charge_costs": {
+        "default": "mdi:cash"
+      },
+      "status": {
+        "default": "mdi:information-outline",
+        "state": {
+          "ready": "mdi:calculator-variant-outline",
+          "planned": "mdi:calendar-clock",
+          "charging": "mdi:battery-charging",
+          "completed": "mdi:battery-check",
+          "invalid_input": "mdi:alert-circle-outline",
+          "limit_not_above_soc": "mdi:alert-circle-outline",
+          "no_price_data": "mdi:cash-remove",
+          "not_enough_prices": "mdi:timer-sand",
+          "no_window": "mdi:calendar-remove"
+        }
+      },
+      "car_brand": {
+        "default": "mdi:car-info"
+      },
+      "car_model": {
+        "default": "mdi:car-info"
+      },
+      "car_variant": {
+        "default": "mdi:car-info"
+      },
+      "car_battery_capacity": {
+        "default": "mdi:car-battery"
+      }
+    },
+    "switch": {
+      "use_completion_time": {
+        "default": "mdi:clock-check-outline",
+        "state": {
+          "off": "mdi:clock-remove-outline"
+        }
+      },
+      "continuous_charging_preferred": {
+        "default": "mdi:timeline-clock-outline",
+        "state": {
+          "off": "mdi:chart-timeline-variant"
+        }
+      }
+    },
+    "text": {
+      "license_plate": {
+        "default": "mdi:card-text-outline"
+      }
+    },
+    "time": {
+      "charge_completion_time": {
+        "default": "mdi:clock-check-outline"
+      }
+    }
+  },
+  "services": {
+    "grab_car_data": {
+      "service": "mdi:car-search"
+    },
+    "calculate": {
+      "service": "mdi:calculator"
+    }
+  }
+}

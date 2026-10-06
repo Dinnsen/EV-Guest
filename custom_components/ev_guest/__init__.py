@@ -4,69 +4,45 @@ from __future__ import annotations
 
 import logging
 
-import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import entity_registry as er
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_COUNTRY,
     CONF_CURRENCY,
-    CONF_DURATION_FORMAT,
     CONF_MOTORAPI_KEY,
     CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
-    CONF_TIME_FORMAT,
+    CONNECTION_KEYS,
     DEFAULT_COUNTRY,
+    DEFAULT_CURRENCY,
     DEFAULT_PLATE_PROVIDER,
+    DEFAULT_PRICE_ENTITY,
     DOMAIN,
-    LEGACY_ENABLE_CHARGER_CONTROL_KEY,
+    LEGACY_ENTITIES,
     PLATFORMS,
-    SERVICE_CALCULATE,
-    SERVICE_GRAB_CAR_DATA,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
-from .coordinator import EVGuestCoordinator
+from .coordinator import EVGuestConfigEntry, EVGuestCoordinator
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
-SERVICE_SCHEMA = vol.Schema({vol.Required("entry_id"): cv.string})
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-def _normalize_country(value: str | None) -> str:
-    if not value:
-        return DEFAULT_COUNTRY
-
-    lowered = value.strip().lower()
-    if lowered in {"dk", "denmark", "danmark"}:
-        return "Denmark"
-
-    return DEFAULT_COUNTRY
-
-
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up EV Guest services."""
-
-    async def _handle_grab(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass, call.data["entry_id"])
-        await coordinator.async_lookup_car_data()
-
-    async def _handle_calculate(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass, call.data["entry_id"])
-        await coordinator.async_calculate()
-
-    if not hass.services.has_service(DOMAIN, SERVICE_GRAB_CAR_DATA):
-        hass.services.async_register(DOMAIN, SERVICE_GRAB_CAR_DATA, _handle_grab, schema=SERVICE_SCHEMA)
-    if not hass.services.has_service(DOMAIN, SERVICE_CALCULATE):
-        hass.services.async_register(DOMAIN, SERVICE_CALCULATE, _handle_calculate, schema=SERVICE_SCHEMA)
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the EV Guest actions."""
+    async_setup_services(hass)
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: EVGuestConfigEntry) -> bool:
+    """Set up EV Guest from a config entry."""
     _remove_legacy_entities(hass, entry)
     coordinator = EVGuestCoordinator(hass, entry)
     await coordinator.async_initialize()
@@ -75,71 +51,67 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: EVGuestConfigEntry) -> bool:
+    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator: EVGuestCoordinator = entry.runtime_data
-        await coordinator.async_shutdown()
+        await entry.runtime_data.async_shutdown()
     return unload_ok
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    _LOGGER.debug("Removing EV Guest entry %s", entry.entry_id)
-    store = Store(hass, STORAGE_VERSION, STORAGE_KEY.format(entry_id=entry.entry_id))
+    """Remove stored inputs and plan when the entry is deleted."""
+    store: Store[dict] = Store(hass, STORAGE_VERSION, STORAGE_KEY.format(entry_id=entry.entry_id))
     await store.async_remove()
 
 
 def _remove_legacy_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Remove entities that no longer exist since 0.7.0 (charger control)."""
+    """Remove entities replaced or removed in later versions."""
     registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id(
-        "switch", DOMAIN, f"{entry.entry_id}_{LEGACY_ENABLE_CHARGER_CONTROL_KEY}"
-    )
-    if entity_id:
-        registry.async_remove(entity_id)
-        _LOGGER.info("Removed legacy entity %s (charger control was removed in 0.7.0)", entity_id)
+    for platform, key in LEGACY_ENTITIES:
+        if entity_id := registry.async_get_entity_id(platform, DOMAIN, f"{entry.entry_id}_{key}"):
+            registry.async_remove(entity_id)
+            _LOGGER.info("Removed legacy entity %s", entity_id)
+
+
+def _normalize_country(value: str | None) -> str:
+    if value and value.strip().lower() in {"dk", "denmark", "danmark"}:
+        return DEFAULT_COUNTRY
+    return DEFAULT_COUNTRY
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate older EV Guest config entries to the latest format."""
-    current_data = dict(entry.data)
-    current_options = dict(entry.options)
+    """Migrate older config entries.
 
-    new_data = dict(current_data)
-    new_options = dict(current_options)
+    Old keys (charger settings, time and duration formats) are left in place
+    so that a downgrade still finds its configuration.
+    """
+    if entry.version > 7:
+        return False
 
-    new_data.setdefault("name", entry.title or "EV Guest")
-    new_data.setdefault(CONF_PRICE_ENTITY, "sensor.energi_data_service")
-    new_data.setdefault(CONF_CURRENCY, "DKK")
-    new_data.setdefault(CONF_TIME_FORMAT, "24h")
-    new_data.setdefault(CONF_DURATION_FORMAT, "minutes")
-    new_data.setdefault(CONF_MOTORAPI_KEY, "")
-    new_data.setdefault(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER)
-    new_data[CONF_COUNTRY] = _normalize_country(new_data.get(CONF_COUNTRY))
-    # Charger keys from <= 0.6.x are left untouched (ignored) so a rollback
-    # to 0.6.x still finds its configuration.
-    new_data.pop("language", None)
+    data = dict(entry.data)
+    options = dict(entry.options)
 
-    if CONF_COUNTRY in new_options:
-        new_options[CONF_COUNTRY] = _normalize_country(new_options.get(CONF_COUNTRY))
-    new_options.pop("language", None)
+    if entry.version < 7:
+        data.setdefault("name", entry.title or "EV Guest")
+        data.setdefault(CONF_PRICE_ENTITY, DEFAULT_PRICE_ENTITY)
+        data.setdefault(CONF_CURRENCY, DEFAULT_CURRENCY)
+        data.setdefault(CONF_MOTORAPI_KEY, "")
+        data.setdefault(CONF_PLATE_PROVIDER, DEFAULT_PLATE_PROVIDER)
+        data[CONF_COUNTRY] = _normalize_country(data.get(CONF_COUNTRY))
+        data.pop("language", None)
+        options.pop("language", None)
+        if CONF_COUNTRY in options:
+            options[CONF_COUNTRY] = _normalize_country(options.get(CONF_COUNTRY))
 
-    changed = (
-        entry.version < 7
-        or entry.minor_version != 0
-        or new_data != current_data
-        or new_options != current_options
-    )
-    if not changed:
-        return True
+    # 7.1: connection settings live in data (changed via reconfigure);
+    # options only hold preferences.
+    for key in CONNECTION_KEYS:
+        if key in options:
+            value = options.pop(key)
+            if key != CONF_MOTORAPI_KEY or value:
+                data[key] = value
 
-    hass.config_entries.async_update_entry(entry, data=new_data, options=new_options, version=7, minor_version=0)
-    _LOGGER.info("Migrated EV Guest config entry %s to version 7.0", entry.entry_id)
+    hass.config_entries.async_update_entry(entry, data=data, options=options, version=7, minor_version=1)
+    _LOGGER.debug("Migrated EV Guest config entry %s to version 7.1", entry.entry_id)
     return True
-
-
-def _get_coordinator(hass: HomeAssistant, entry_id: str) -> EVGuestCoordinator:
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.entry_id == entry_id and getattr(entry, "runtime_data", None) is not None:
-            return entry.runtime_data
-    raise HomeAssistantError(f"Unknown EV Guest entry_id: {entry_id}")

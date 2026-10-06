@@ -2,60 +2,39 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import INPUT_CONTINUOUS_CHARGING_PREFERRED, INPUT_USE_COMPLETION_TIME
-from .entity import EVGuestCoordinatorEntity
+from .coordinator import EVGuestConfigEntry
+from .entity import EVGuestEntity
 
 PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: EVGuestConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
     async_add_entities(
-        [
-            EVGuestUseCompletionTimeSwitch(coordinator),
-            EVGuestContinuousChargingPreferredSwitch(coordinator),
-        ]
+        EVGuestInputSwitch(coordinator, key) for key in (INPUT_USE_COMPLETION_TIME, INPUT_CONTINUOUS_CHARGING_PREFERRED)
     )
 
 
-class _BaseInputSwitch(EVGuestCoordinatorEntity, SwitchEntity):
-    _default = False
+class EVGuestInputSwitch(EVGuestEntity, SwitchEntity):
+    """A planning option."""
 
     @property
     def is_on(self) -> bool:
-        return bool(self.coordinator.data.inputs.get(self._key, self._default))
+        return bool(self.coordinator.data.inputs.get(self._key, True))
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_input_value(self._key, True)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_input_value(self._key, False)
-
-
-class EVGuestUseCompletionTimeSwitch(_BaseInputSwitch):
-    """Toggle whether completion time should be enforced."""
-
-    _attr_name = "Use Charge Completion Time"
-    _attr_icon = "mdi:clock-check-outline"
-    _default = True
-
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator, INPUT_USE_COMPLETION_TIME)
-
-
-class EVGuestContinuousChargingPreferredSwitch(_BaseInputSwitch):
-    """Prefer one continuous charging block."""
-
-    _attr_name = "Continuous Charging Preferred"
-    _attr_icon = "mdi:timeline-clock-outline"
-    _default = True
-
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator, INPUT_CONTINUOUS_CHARGING_PREFERRED)

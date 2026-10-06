@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check version matches tag
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('custom_components/ev_guest/manifest.json'))['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::manifest.json version $version does not match tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Build zip
+        run: |
+          cd custom_components/ev_guest
+          zip -r "$GITHUB_WORKSPACE/ev_guest.zip" . -x "__pycache__/*"
+
+      - name: Upload zip to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" ev_guest.zip --clobber
