@@ -70,6 +70,8 @@ EV Guest is a calculator: it never switches a charger itself. Pair it with a sim
 
 Add **EV Guest** under **Settings → Devices & services → Add integration**.
 
+<img src="docs/screenshots/setup.png" alt="EV Guest setup dialog" width="420">
+
 | Setting | Description |
 | --- | --- |
 | Name | Device name, for example *EV Guest*. Each EV Guest needs its own name. |
