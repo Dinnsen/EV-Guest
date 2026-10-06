@@ -41,7 +41,8 @@ jobs:
           if total:
               print(f"::notice title=Coverage::{total.group(1)}")
           summary = text[text.find("short test summary"):] if "short test summary" in text else ""
-          failures = text[text.find("= FAILURES ="):] if "= FAILURES =" in text else ""
+          marker = next((m for m in ("= ERRORS =", "= FAILURES =") if m in text), None)
+          failures = text[text.find(marker):] if marker else ""
           tail = "" if (failures or summary) else text[-4000:]
           for title, body in (("Failures", failures), ("Summary", summary), ("Output", tail)):
               for i in range(0, min(len(body), 24000), 4000):
