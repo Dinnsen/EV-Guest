@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv, service
 
 from .const import ATTR_CONFIG_ENTRY_ID, DOMAIN, SERVICE_CALCULATE, SERVICE_GRAB_CAR_DATA, SERVICE_NEW_GUEST
-from .coordinator import EVGuestCoordinator
+from .coordinator import EVGuestConfigEntry, EVGuestCoordinator
 from .schema import vol
 
 # "entry_id" is the field name used before 0.8.0 and is still accepted.
@@ -24,7 +24,7 @@ SERVICE_SCHEMA = vol.All(
 def _get_coordinator(call: ServiceCall) -> EVGuestCoordinator:
     """Return the coordinator for the call; optional with a single entry."""
     entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID) or call.data.get("entry_id")
-    entry = service.async_get_config_entry(call.hass, DOMAIN, entry_id)
+    entry: EVGuestConfigEntry = service.async_get_config_entry(call.hass, DOMAIN, entry_id)
     return entry.runtime_data
 
 
