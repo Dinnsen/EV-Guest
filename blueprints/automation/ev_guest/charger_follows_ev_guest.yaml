@@ -1,0 +1,150 @@
+blueprint:
+  name: EV Guest – charger follows the plan
+  description: >-
+    Starts and pauses your charger with the EV Guest plan while there is a
+    guest, and hands the charger back when the guest session ends.
+
+    Works with any charger: you choose the actions that start and pause
+    charging – a switch, a button, an action such as `monta.start_charging`,
+    or a current limit.
+
+    It follows EV Guest's **Charger control** sensor. EV Guest only holds the
+    charger during a guest session, and a session always ends by itself: when
+    the plan ends, on **New guest**, or when the car is unplugged. With a car
+    connected sensor set in the EV Guest options, a guest car still plugged
+    in after the plan stays paused until it is unplugged (at most 24 hours).
+    Outside a session this automation does nothing, so it never blocks your
+    own car.
+  domain: automation
+  author: Dinnsen
+  source_url: https://github.com/Dinnsen/EV-Guest/blob/main/blueprints/automation/ev_guest/charger_follows_ev_guest.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    ev_guest:
+      name: EV Guest
+      icon: mdi:ev-station
+      input:
+        charger_control:
+          name: Charger control
+          description: The *Charger control* sensor of the EV Guest to follow (e.g. `sensor.ev_guest_charger_control`).
+          selector:
+            entity:
+              filter:
+                - integration: ev_guest
+                  domain: sensor
+                  device_class: enum
+    charger:
+      name: Charger
+      icon: mdi:ev-plug-type2
+      input:
+        start_actions:
+          name: Start charging
+          description: >-
+            What lets the charger charge, e.g. turn on its switch or resume
+            charging. Also used to hand the charger back when the guest
+            session ends.
+          selector:
+            action: {}
+        stop_actions:
+          name: Pause charging
+          description: What pauses charging, e.g. turn off its switch or stop charging.
+          selector:
+            action: {}
+
+mode: queued
+max: 10
+
+variables:
+  charger_control: !input charger_control
+
+triggers:
+  - trigger: state
+    entity_id: !input charger_control
+    to: charge
+    not_from: [unavailable, unknown]
+    id: charge
+  - trigger: state
+    entity_id: !input charger_control
+    to: pause
+    not_from: [unavailable, unknown]
+    id: pause
+  # A car plugged in outside a charging period: most chargers start by
+  # themselves, so pause again.
+  - trigger: state
+    entity_id: !input charger_control
+    attribute: car_connected
+    from: false
+    to: true
+    id: plugged_in
+  # The guest session has ended: hand the charger back. Only after EV Guest
+  # held it (charge or pause), never on its own.
+  - trigger: state
+    entity_id: !input charger_control
+    from: [charge, pause]
+    to: released
+    id: release
+  # EV Guest removed or disabled during a session.
+  - trigger: state
+    entity_id: !input charger_control
+    from: [charge, pause]
+    to: unavailable
+    for:
+      minutes: 10
+    id: release
+  - trigger: homeassistant
+    event: start
+    id: start
+
+actions:
+  - choose:
+      - alias: Charge
+        conditions:
+          - condition: trigger
+            id: charge
+        sequence: !input start_actions
+      - alias: Pause (also when a car is plugged in)
+        conditions:
+          - condition: trigger
+            id: [pause, plugged_in]
+          - condition: state
+            entity_id: !input charger_control
+            state: pause
+        sequence: !input stop_actions
+      - alias: Hand the charger back
+        conditions:
+          - condition: trigger
+            id: release
+        sequence: !input start_actions
+      - alias: After a restart, during a session – charge
+        conditions:
+          - condition: trigger
+            id: start
+          - condition: state
+            entity_id: !input charger_control
+            state: charge
+        sequence: !input start_actions
+      - alias: After a restart, during a session – pause
+        conditions:
+          - condition: trigger
+            id: start
+          - condition: state
+            entity_id: !input charger_control
+            state: pause
+        sequence: !input stop_actions
+      - alias: After a restart – hand back a charger whose session ended while Home Assistant was down
+        conditions:
+          - condition: trigger
+            id: start
+          - condition: state
+            entity_id: !input charger_control
+            state: released
+          # Only when the session ended after this automation last ran, i.e.
+          # the hand-back was missed. Never touches a charger it did not hold.
+          - condition: template
+            value_template: >-
+              {% set released = state_attr(charger_control, 'released_at') %}
+              {% set last = this.attributes.last_triggered if this is not none else none %}
+              {{ released is not none and last is not none
+                 and as_datetime(released) > as_datetime(last | string) }}
+        sequence: !input start_actions

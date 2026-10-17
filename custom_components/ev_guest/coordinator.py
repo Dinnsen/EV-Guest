@@ -10,12 +10,13 @@ from typing import Any, NoReturn
 from uuid import uuid4
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_point_in_time,
     async_track_state_change_event,
     async_track_time_interval,
@@ -55,6 +56,10 @@ from .const import (
     CONF_MOTORAPI_KEY,
     CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
+    CONF_VEHICLE_ENTITY,
+    CONTROL_CHARGE,
+    CONTROL_PAUSE,
+    CONTROL_RELEASED,
     DATASET_CACHE_KEY,
     DEFAULT_CHARGING_EFFICIENCY,
     DEFAULT_COMPLETION_TIME,
@@ -80,7 +85,12 @@ from .const import (
     ISSUE_PRICE_ENTITY_MISSING,
     METER_GRACE,
     PLANNING_HORIZON,
+    POST_PLAN_HOLD,
     PROGRESS_INTERVAL,
+    RELEASE_CLEARED,
+    RELEASE_NEW_GUEST,
+    RELEASE_PLAN_END,
+    RELEASE_UNPLUGGED,
     RESULT_CAR_BATTERY_CAPACITY,
     RESULT_CAR_BRAND,
     RESULT_CAR_MODEL,
@@ -98,6 +108,7 @@ from .const import (
     STATUS_READY,
     STORAGE_KEY,
     STORAGE_VERSION,
+    UNPLUG_DELAY,
 )
 from .planner import (
     Plan,
@@ -180,6 +191,14 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self._boundary_callbacks: list[CALLBACK_TYPE] = []
         # Updates the estimated charge level while a charging period runs.
         self._progress_tick: CALLBACK_TYPE | None = None
+        # Set when a guest session ended before its plan did (new guest, car
+        # unplugged, plan cleared): {"at": iso time, "reason": ...}. From then
+        # on EV Guest no longer holds the charger.
+        self._release: dict[str, str] | None = None
+        self._unplug_timer: CALLBACK_TYPE | None = None
+        # Whether a car is plugged in, from the car connected sensor; it only
+        # turns False once the car has stayed unplugged for UNPLUG_DELAY.
+        self._car_present = False
         # Planned charging intervals. This is the source of truth for
         # charge_now and the plan sensors; charging_schedule is per price
         # slot and only meant for graphs.
@@ -238,6 +257,10 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         return self.config.get(CONF_ENERGY_ENTITY) or None
 
     @property
+    def vehicle_entity(self) -> str | None:
+        return self.config.get(CONF_VEHICLE_ENTITY) or None
+
+    @property
     def currency(self) -> str:
         return str(self.config.get(CONF_CURRENCY) or self.hass.config.currency or DEFAULT_CURRENCY)
 
@@ -267,6 +290,13 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             self._unsub.append(
                 async_track_state_change_event(self.hass, [self.energy_entity], self._handle_meter_update)
             )
+        if self.vehicle_entity:
+            if (connected := self.car_connected) is not None:
+                self._car_present = connected
+            self._unsub.append(
+                async_track_state_change_event(self.hass, [self.vehicle_entity], self._handle_vehicle_update)
+            )
+        self._update_session(dt_util.now())
         self._maybe_record()
         self._schedule_plan_boundaries()
         await self.async_refresh()
@@ -301,6 +331,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             self._unsub.pop()()
         self._cancel_plan_boundaries()
         self._stop_progress_tick()
+        self._cancel_unplug_timer()
         # Write now instead of after the save delay: a reload (e.g. after an
         # options change) would otherwise load the state from before.
         await self._store.async_save(self._data_to_store())
@@ -366,6 +397,9 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self._plan_info = info if isinstance(info, dict) else None
         # Plans from before 0.9.0 have no info and are never added to history.
         self._recorded = bool(stored.get("recorded", self._plan_info is None))
+        release = stored.get("release")
+        self._release = release if isinstance(release, dict) else None
+        self._car_present = bool(stored.get("car_present", False))
         meter = stored.get("meter_last")
         self._meter_last = float(meter) if isinstance(meter, int | float) else None
         self.history = [entry for entry in stored.get("history") or [] if isinstance(entry, dict)][:HISTORY_LIMIT]
@@ -385,6 +419,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             "plan_info": self._plan_info,
             "recorded": self._recorded,
             "meter_last": self._meter_last,
+            "release": self._release,
+            "car_present": self._car_present,
             "history": self.history,
             "settings": self.settings,
         }
@@ -424,6 +460,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             return self._error
         if not self._plan_segments:
             return STATUS_READY
+        if self._release is not None:
+            return STATUS_COMPLETED
         now = now or dt_util.now()
         if self.is_charge_now(now):
             return STATUS_CHARGING
@@ -631,7 +669,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             if manual:
                 # Do not keep following an old plan the user tried to replace.
                 self._maybe_record(now, ended=True)
-                self._clear_plan()
+                self._clear_plan(now, RELEASE_CLEARED)
                 self._async_save_state()
                 self._fail(err.key, cause=err, show_in_status=True)
             if not self._plan_segments:
@@ -701,6 +739,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     def _start_session(self) -> None:
         """A new plan starts a new guest session."""
         self._recorded = False
+        self._release = None
         if self.energy_entity:
             self.data.results[RESULT_MEASURED_ENERGY] = 0.0
             self.data.results[RESULT_MEASURED_COST] = 0.0
@@ -710,7 +749,9 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             self.data.results[RESULT_MEASURED_COST] = None
 
     @callback
-    def _clear_plan(self) -> None:
+    def _clear_plan(self, now: datetime, reason: str) -> None:
+        if self.session_active(now):
+            self._release = {"at": now.isoformat(), "reason": reason}
         self._set_plan([])
         for key in PLAN_RESULTS:
             self.data.results[key] = None
@@ -722,8 +763,9 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
 
         A plan that has finished is added to the history first.
         """
-        self._maybe_record(dt_util.now(), ended=True)
-        self._clear_plan()
+        now = dt_util.now()
+        self._maybe_record(now, ended=True)
+        self._clear_plan(now, RELEASE_NEW_GUEST)
         self._set_error(None)
         self._auto_recalculate = False
         self.data.inputs[INPUT_LICENSE_PLATE] = ""
@@ -753,6 +795,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         moments = [moment for segment in self._plan_segments for moment in (segment["start"], segment["end"])]
         if self._plan_segments and not self._recorded:
             moments.append(self._plan_segments[-1]["end"] + METER_GRACE)
+        if self._plan_segments and self.vehicle_entity and self._release is None:
+            moments.append(self._plan_segments[-1]["end"] + POST_PLAN_HOLD)
         for moment in moments:
             if moment > now:
                 self._boundary_callbacks.append(
@@ -767,6 +811,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
 
     @callback
     def _handle_plan_boundary(self, now: datetime) -> None:
+        self._update_session(now)
         self._maybe_record(now)
         self._update_progress_tick(now)
         self.async_update_listeners()
@@ -802,8 +847,112 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         return self._plan_segments[0]["start"] <= now
 
     def is_charge_now(self, now: datetime | None = None) -> bool:
+        if self._release is not None:
+            return False
         now = now or dt_util.now()
         return any(segment["start"] <= now < segment["end"] for segment in self._plan_segments)
+
+    # ------------------------------------------------------------------
+    # Guest session and charger control
+
+    def session_active(self, now: datetime | None = None) -> bool:
+        """True while a guest plan holds the charger.
+
+        A session starts with a new plan and always ends by itself: when the
+        plan ends, on New guest, when a calculation clears the plan, or when
+        the car is unplugged (with a car connected sensor). With that sensor,
+        a guest car still plugged in after the plan stays paused until it is
+        unplugged, for at most POST_PLAN_HOLD. EV Guest never holds the
+        charger outside a session.
+        """
+        end = self.plan_end
+        if end is None or self._release is not None:
+            return False
+        now = now or dt_util.now()
+        if now < end:
+            return True
+        return bool(self.vehicle_entity) and self._car_present and now < end + POST_PLAN_HOLD
+
+    def charger_control(self, now: datetime | None = None) -> str:
+        """What a charger automation should do now."""
+        now = now or dt_util.now()
+        if not self.session_active(now):
+            return CONTROL_RELEASED
+        return CONTROL_CHARGE if self.is_charge_now(now) else CONTROL_PAUSE
+
+    def release_info(self, now: datetime | None = None) -> dict[str, str] | None:
+        """When and why the last guest session ended; None during a session."""
+        now = now or dt_util.now()
+        if self.session_active(now):
+            return None
+        if self._release is not None:
+            return dict(self._release)
+        end = self.plan_end
+        if end is not None:
+            return {"at": end.isoformat(), "reason": RELEASE_PLAN_END}
+        return None
+
+    @callback
+    def _update_session(self, now: datetime) -> None:
+        """Note when a session has ended by itself (plan over, or the hold after it)."""
+        end = self.plan_end
+        if self._release is None and end is not None and now >= end and not self.session_active(now):
+            self._release = {"at": now.isoformat(), "reason": RELEASE_PLAN_END}
+            self._async_save_state()
+
+    @property
+    def car_connected(self) -> bool | None:
+        """The car connected sensor, if one is set and known."""
+        if not self.vehicle_entity:
+            return None
+        state = self.hass.states.get(self.vehicle_entity)
+        if state is None or state.state not in (STATE_ON, STATE_OFF):
+            return None
+        return state.state == STATE_ON
+
+    @callback
+    def _handle_vehicle_update(self, event: Event[EventStateChangedData]) -> None:
+        """Follow the car connected sensor; end the session when the car stays unplugged."""
+        new = event.data["new_state"]
+        if new is not None and new.state == STATE_ON:
+            self._cancel_unplug_timer()
+            self._car_present = True
+        elif new is not None and new.state == STATE_OFF:
+            now = dt_util.now()
+            end = self.plan_end
+            if not self.session_active(now):
+                self._car_present = False
+            elif end is not None and now >= end:
+                # After the plan only the hold is left: end it right away, so a
+                # car plugged in next is never kept waiting.
+                self._handle_unplugged(now)
+                return
+            elif self._unplug_timer is None:
+                self._unplug_timer = async_call_later(self.hass, UNPLUG_DELAY, self._handle_unplugged)
+        self._async_save_state()
+        self.async_update_listeners()
+
+    @callback
+    def _handle_unplugged(self, now: datetime) -> None:
+        self._unplug_timer = None
+        if self.car_connected is not False:
+            return
+        active = self.session_active(now)
+        self._car_present = False
+        if active:
+            self._release = {"at": now.isoformat(), "reason": RELEASE_UNPLUGGED}
+            # Never plan again for a guest who has left.
+            self._auto_recalculate = False
+            self._maybe_record(now, released=True)
+            self._stop_progress_tick()
+        self._async_save_state()
+        self.async_update_listeners()
+
+    @callback
+    def _cancel_unplug_timer(self) -> None:
+        if self._unplug_timer is not None:
+            self._unplug_timer()
+            self._unplug_timer = None
 
     def progress(self, now: datetime | None = None) -> Progress | None:
         """The estimated charge level of the guest car, from the plan or the meter.
@@ -818,7 +967,11 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             value = self.data.results.get(RESULT_MEASURED_ENERGY)
             measured = float(value) if isinstance(value, int | float) else None
         inputs = (self._plan_info or {}).get("inputs")
-        return plan_progress(self._plan_segments, inputs, now or dt_util.now(), measured)
+        now = now or dt_util.now()
+        if self._release is not None and (released := dt_util.parse_datetime(self._release.get("at", ""))):
+            # Nothing is charged after the guest has left.
+            now = min(now, released)
+        return plan_progress(self._plan_segments, inputs, now, measured)
 
     # ------------------------------------------------------------------
     # Energy meter
@@ -832,6 +985,9 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         last, self._meter_last = self._meter_last, reading
         start, end = self.plan_start, self.plan_end
         if last is None or start is None or end is None or self._recorded:
+            return
+        if self._release is not None and self._release.get("reason") != RELEASE_PLAN_END:
+            # The guest has left; another car may be charging now.
             return
         now = dt_util.now()
         if not start <= now <= end + METER_GRACE:
@@ -854,18 +1010,24 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     # History
 
     @callback
-    def _maybe_record(self, now: datetime | None = None, *, ended: bool = False) -> None:
+    def _maybe_record(self, now: datetime | None = None, *, ended: bool = False, released: bool = False) -> None:
         """Add the current plan to the history once it has finished.
 
         Normally that is a while after the plan ends, so late meter readings
         are included; ``ended`` records a finished plan right away (before it
-        is replaced).
+        is replaced). ``released`` records a session that ended early (the car
+        was unplugged) up to that moment; one that never started is dropped.
         """
         end = self.plan_end
         if self._recorded or self._plan_info is None or end is None:
             return
         now = now or dt_util.now()
-        if now < end + (timedelta() if ended else METER_GRACE):
+        if released:
+            if now <= self._plan_segments[0]["start"]:
+                self._recorded = True
+                return
+            end = min(now, end)
+        elif now < end + (timedelta() if ended else METER_GRACE):
             return
         results = self.data.results
         entry = {

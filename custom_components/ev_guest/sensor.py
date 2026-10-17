@@ -15,6 +15,7 @@ from homeassistant.helpers.typing import StateType
 
 from .const import (
     ATTR_AVERAGE_PRICE,
+    ATTR_CAR_CONNECTED,
     ATTR_CHARGE_NOW_COST,
     ATTR_CHARGING_SCHEDULE,
     ATTR_CHARGING_SEGMENTS,
@@ -30,10 +31,14 @@ from .const import (
     ATTR_PLANNED_ENERGY,
     ATTR_PLANNED_SOC,
     ATTR_RAW_TWO_DAYS,
+    ATTR_RELEASE_REASON,
+    ATTR_RELEASED_AT,
+    ATTR_SESSION_ENDS,
     ATTR_SOURCE,
     ATTR_START_SOC,
     ATTR_TARGET_SOC,
     ATTR_VIN,
+    CONTROL_OPTIONS,
     RESULT_CAR_BATTERY_CAPACITY,
     RESULT_CAR_BRAND,
     RESULT_CAR_MODEL,
@@ -42,6 +47,7 @@ from .const import (
     RESULT_CHARGE_END_TIME,
     RESULT_CHARGE_START_TIME,
     RESULT_CHARGE_TIME,
+    RESULT_CHARGER_CONTROL,
     RESULT_CHARGING_SPEED,
     RESULT_ENERGY,
     RESULT_ESTIMATED_SOC,
@@ -146,6 +152,12 @@ SENSORS: tuple[EVGuestSensorEntityDescription, ...] = (
         value_fn=_estimated_soc,
     ),
     EVGuestSensorEntityDescription(
+        key=RESULT_CHARGER_CONTROL,
+        device_class=SensorDeviceClass.ENUM,
+        options=CONTROL_OPTIONS,
+        value_fn=lambda coordinator: coordinator.charger_control(),
+    ),
+    EVGuestSensorEntityDescription(
         key=RESULT_STATUS,
         device_class=SensorDeviceClass.ENUM,
         options=STATUS_OPTIONS,
@@ -232,6 +244,16 @@ class EVGuestSensor(EVGuestEntity, SensorEntity):
                 ATTR_TARGET_SOC: progress.target_soc,
                 ATTR_PLANNED_SOC: round(progress.planned_soc, 1),
                 ATTR_PLANNED_ENERGY: round(progress.planned_energy, 2),
+            }
+        if self.entity_description.key == RESULT_CHARGER_CONTROL:
+            release = self.coordinator.release_info()
+            active = self.coordinator.session_active()
+            plan_end = self.coordinator.plan_end
+            return {
+                ATTR_SESSION_ENDS: plan_end.isoformat() if active and plan_end else None,
+                ATTR_RELEASED_AT: release["at"] if release else None,
+                ATTR_RELEASE_REASON: release["reason"] if release else None,
+                ATTR_CAR_CONNECTED: self.coordinator.car_connected,
             }
         if self.entity_description.key != RESULT_STATUS:
             return None

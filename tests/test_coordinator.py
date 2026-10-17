@@ -322,6 +322,7 @@ async def test_entity_registry_unique_ids(hass: HomeAssistant, init_integration:
         "energy",
         "savings",
         "estimated_soc",
+        "charger_control",
         "new_guest",
         "status",
         "car_brand",

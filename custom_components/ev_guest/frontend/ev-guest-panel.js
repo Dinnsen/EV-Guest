@@ -52,6 +52,7 @@ const TEXT = {
     charging_until: "Lader – færdig kl. {time}",
     paused_until: "Pause – lader igen kl. {time}",
     completed_at: "Færdig kl. {time}",
+    unplugged_at: "Bilen blev koblet fra kl. {time} – laderen er frigivet",
     status_ready: "Klar til en plan",
     status_planned: "Planlagt",
     status_charging: "Lader",
@@ -177,6 +178,7 @@ const TEXT = {
     charging_until: "Charging – done at {time}",
     paused_until: "Paused – charging again at {time}",
     completed_at: "Done at {time}",
+    unplugged_at: "The car was unplugged at {time} – the charger is released",
     status_ready: "Ready for a plan",
     status_planned: "Planned",
     status_charging: "Charging",
@@ -1097,7 +1099,10 @@ class EvGuestPanel extends HTMLElement {
       if (started && next) text = this._t("paused_until", { time: this._time(new Date(next.start).toISOString()) });
       else if (next) text = this._t("starts_in", { time: this._duration((next.start - now) / 60000) });
     } else if (s.status === "completed") {
-      text = this._t("completed_at", { time: this._time(s.plan.segments.at(-1).end) });
+      text =
+        s.release && s.release.reason === "unplugged"
+          ? this._t("unplugged_at", { time: this._time(s.release.at) })
+          : this._t("completed_at", { time: this._time(s.plan.segments.at(-1).end) });
     } else {
       text = this._t("status_ready");
     }

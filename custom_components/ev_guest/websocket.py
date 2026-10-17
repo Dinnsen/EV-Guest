@@ -123,6 +123,8 @@ def panel_state(hass: HomeAssistant, coordinator: EVGuestCoordinator) -> dict[st
         "error": coordinator.error,
         "error_detail": coordinator.error_detail,
         "charge_now": coordinator.is_charge_now(now),
+        "control": coordinator.charger_control(now),
+        "release": coordinator.release_info(now),
         "plan_locked": coordinator.is_plan_locked(now),
         "inputs": inputs,
         "car": {
