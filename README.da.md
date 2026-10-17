@@ -139,6 +139,8 @@ Bagefter:
 
 Flere EV Guests (fx to ladere)? Vælg mellem dem øverst i panelet.
 
+Hvad betyder bjælkerne og buerne på uret? Tryk **?** øverst til højre for en rundtur: hver del af ladeuret lyser op og bliver levende, mens resten bliver grå, og bagefter går rundturen gennem resten af panelet.
+
 <img src="docs/images/da/settings.png" alt="Indstillinger for afregning, ladeeffektivitet og datakilder" width="100%">
 
 Under **Indstillinger** sætter du din pris pr. kWh og betalingsoplysninger til afregning, ladeeffektiviteten og ser datakilderne.

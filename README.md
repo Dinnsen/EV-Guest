@@ -139,6 +139,8 @@ Afterwards:
 
 Several EV Guests (e.g. two chargers)? Choose between them at the top of the panel.
 
+What do the bars and arcs on the clock mean? Tap **?** at the top right for a guided tour: each part of the price clock lights up and comes alive while the rest turns grey, and then the tour goes through the rest of the panel.
+
 <img src="docs/images/en/settings.png" alt="Settings for billing guests, charging efficiency and data sources" width="100%">
 
 **Settings** holds your price per kWh and payment details for bills, the charging efficiency and an overview of the data sources.
