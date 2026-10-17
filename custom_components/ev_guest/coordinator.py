@@ -672,6 +672,20 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             "savings": None if plan.savings is None else round(plan.savings, 2),
             "mode": plan.mode,
             "currency": self.currency,
+            # The inputs the plan was made with, so the panel can tell when they changed.
+            "inputs": {
+                key: self.data.inputs.get(key)
+                for key in (
+                    INPUT_SOC,
+                    INPUT_CHARGE_LIMIT,
+                    INPUT_BATTERY_CAPACITY,
+                    INPUT_CHARGER_POWER,
+                    INPUT_CHARGING_EFFICIENCY,
+                    INPUT_CHARGE_COMPLETION_TIME,
+                    INPUT_USE_COMPLETION_TIME,
+                    INPUT_CONTINUOUS_CHARGING_PREFERRED,
+                )
+            },
         }
 
     @callback
