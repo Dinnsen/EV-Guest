@@ -25,3 +25,17 @@ source = ["custom_components.ev_guest"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+
+[tool.mypy]
+python_version = "3.14"
+files = ["custom_components/ev_guest"]
+strict = true
+# Home Assistant re-exports names from its packages without __all__.
+implicit_reexport = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-self", "truthy-iterable"]
+disable_error_code = ["annotation-unchecked"]
+
+[[tool.mypy.overrides]]
+module = ["voluptuous"]
+ignore_missing_imports = true

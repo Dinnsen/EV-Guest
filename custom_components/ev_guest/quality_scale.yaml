@@ -81,4 +81,4 @@ rules:
     status: exempt
     comment: No external library.
   inject-websession: done
-  strict-typing: todo
+  strict-typing: done
