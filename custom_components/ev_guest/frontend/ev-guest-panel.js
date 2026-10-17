@@ -3,6 +3,48 @@
 const TEXT = {
   da: {
     tab_charge: "Opladning",
+    help: "Hjælp",
+    help_title: "Sådan virker EV Guest",
+    help_intro: "EV Guest finder de billigste timer at lade en gæstebil i – uden at bilen skal ind i Home Assistant.",
+    help_clock: "Ladeuret",
+    help_clock_intro: "Uret viser det næste døgn på en 24-timers urskive med kl. 00 øverst.",
+    help_face: "Urskiven",
+    help_face_text: "En streg for hver time. De lange streger er kl. 00, 06, 12 og 18.",
+    help_bars: "Prisbjælkerne",
+    help_bars_text: "Én bjælke for hver prisperiode fra nu og et døgn frem. Jo længere og rødere, jo dyrere – jo kortere og grønnere, jo billigere. Farverne er i forhold til døgnets egne priser. Hold musen over en bjælke (eller tryk) for at se prisen.",
+    help_window: "Den grønne bue",
+    help_window_text: "Hvornår bilen lader. Buen gløder, så længe opladningen ligger foran dig, og blegner, når den er overstået. Lader bilen i flere perioder, er der en bue for hver.",
+    help_preview: "Stiplet bue",
+    help_preview_text: "Et forslag: du har ændret noget, men ikke beregnet igen. Tryk Beregn igen for at bruge det.",
+    help_flow: "Prikker der løber",
+    help_flow_text: "Bilen lader lige nu.",
+    help_needle: "Viseren",
+    help_needle_text: "Klokken nu.",
+    help_deadline: "Stiplet linje med en ring",
+    help_deadline_text: "Klar kl. – hvornår bilen skal være ladet.",
+    help_center: "Midten",
+    help_center_text: "Hvad planen koster, hvornår den lader, og hvad du sparer i forhold til at lade med det samme. Uden en plan: prisen nu, og hvornår det er billigst.",
+    help_features: "Funktionerne",
+    help_f_guest: "Gæstebil",
+    help_f_guest_text: "Skriv nummerpladen og tryk Slå op. EV Guest finder bilen og dens batteri. Ringen viser, hvor sikkert batteriet passer – tjek det, eller sæt batteriet selv.",
+    help_f_battery: "Batteri",
+    help_f_battery_text: "Træk Nu til bilens ladeniveau og Mål til, hvor fuld den skal være. Mens bilen lader, viser batteriet cirka, hvor langt den er nået – EV Guest ser ikke selve bilen.",
+    help_f_settings: "Ladeeffekt, Klar kl. og Plan",
+    help_f_settings_text: "Hvad laderen giver, hvornår bilen skal være klar, og om opladningen skal ske i Én periode eller i de Billigste perioder (delt op, hvis det er billigere).",
+    help_f_plan: "Beregn plan",
+    help_f_plan_text: "Laver planen. Den følger nye priser, indtil den starter – så låses den, så bilen aldrig lades to gange.",
+    help_f_status: "Statuslinjen",
+    help_f_status_text: "Hvad der sker nu: starter om lidt, lader, holder pause eller er færdig. Den bliver rød, hvis noget er galt, eller bilen lader langsommere end planlagt.",
+    help_f_facts: "Fakta og prisgraf",
+    help_f_facts_text: "Start, slut, tid, energi, pris, besparelse og hastighed – og priserne for i dag og i morgen med ladeperioderne.",
+    help_f_charger: "Laderen",
+    help_f_charger_text: "Med blueprintet starter og pauser laderen efter planen. Den gives altid tilbage, når planen slutter, når bilen kobles fra, eller når du trykker Ny gæst.",
+    help_f_new: "Ny gæst",
+    help_f_new_text: "Rydder gæst og plan, klar til næste bil. En afsluttet opladning gemmes i Historik.",
+    help_f_history: "Historik og Afregn",
+    help_f_history_text: "Alle afsluttede opladninger med energi og pris. Afregn laver en tekst til gæsten med dine betalingsoplysninger.",
+    help_f_more: "Indstillinger",
+    help_f_more_text: "Pris pr. kWh og betalingsoplysninger til afregning, ladeeffektivitet og datakilder.",
     tab_history: "Historik",
     tab_settings: "Indstillinger",
     loading: "Henter EV Guest …",
@@ -128,6 +170,48 @@ const TEXT = {
     minutes_short: "min",
   },
   en: {
+    help: "Help",
+    help_title: "How EV Guest works",
+    help_intro: "EV Guest finds the cheapest hours to charge a guest car – without adding the car to Home Assistant.",
+    help_clock: "The price clock",
+    help_clock_intro: "The clock shows the next 24 hours on a 24-hour dial with midnight at the top.",
+    help_face: "The dial",
+    help_face_text: "One tick for every hour. The long ticks are 00, 06, 12 and 18.",
+    help_bars: "The price bars",
+    help_bars_text: "One bar for every price period from now and a day ahead. The longer and redder, the more expensive – the shorter and greener, the cheaper. The colours are relative to that day's own prices. Hover over a bar (or tap it) to see the price.",
+    help_window: "The green arc",
+    help_window_text: "When the car charges. The arc glows while the charging is still ahead and fades once it is over. If the car charges in several periods, each gets its own arc.",
+    help_preview: "Dashed arc",
+    help_preview_text: "A preview: you changed something but have not planned again. Tap Plan again to use it.",
+    help_flow: "Moving dots",
+    help_flow_text: "The car is charging right now.",
+    help_needle: "The hand",
+    help_needle_text: "The time now.",
+    help_deadline: "Dashed line with a ring",
+    help_deadline_text: "Ready by – when the car must be charged.",
+    help_center: "The centre",
+    help_center_text: "What the plan costs, when it charges, and what you save compared with charging right away. Without a plan: the price now, and when it is cheapest.",
+    help_features: "The features",
+    help_f_guest: "Guest car",
+    help_f_guest_text: "Enter the license plate and tap Look up. EV Guest finds the car and its battery. The ring shows how sure the battery match is – check it, or set the battery yourself.",
+    help_f_battery: "Battery",
+    help_f_battery_text: "Drag Now to the car's charge level and Target to how full it should be. While the car charges, the battery shows roughly how far it has come – EV Guest does not see the car itself.",
+    help_f_settings: "Charger power, Ready by and Plan",
+    help_f_settings_text: "What the charger delivers, when the car must be ready, and whether to charge in One period or in the Cheapest periods (split up when that is cheaper).",
+    help_f_plan: "Make plan",
+    help_f_plan_text: "Makes the plan. It follows new prices until it starts – then it is locked, so the car is never charged twice.",
+    help_f_status: "The status line",
+    help_f_status_text: "What happens now: starting soon, charging, paused or done. It turns red when something is wrong or the car charges slower than planned.",
+    help_f_facts: "Facts and price graph",
+    help_f_facts_text: "Start, end, time, energy, cost, savings and speed – and today's and tomorrow's prices with the charging periods.",
+    help_f_charger: "The charger",
+    help_f_charger_text: "With the blueprint your charger starts and pauses with the plan. It is always handed back when the plan ends, when the car is unplugged, or when you tap New guest.",
+    help_f_new: "New guest",
+    help_f_new_text: "Clears the guest and the plan, ready for the next car. A finished charge is kept in History.",
+    help_f_history: "History and Bill",
+    help_f_history_text: "Every finished charge with energy and cost. Bill makes a text for the guest with your payment details.",
+    help_f_more: "Settings",
+    help_f_more_text: "Price per kWh and payment details for bills, charging efficiency and data sources.",
     tab_charge: "Charging",
     tab_history: "History",
     tab_settings: "Settings",
@@ -272,6 +356,7 @@ const ICONS = {
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h9"/></svg>',
   share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  help: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.4a2.4 2.4 0 1 1 3.4 2.2c-.7.4-1.1.9-1.1 1.7v.3"/><path d="M12 16.6v.1"/></svg>',
 };
 
 const MARK = `<svg viewBox="19 19 218 218" aria-hidden="true">
@@ -655,11 +740,13 @@ class EvGuestPanel extends HTMLElement {
           <div class="brand">${MARK}<span>EV Guest</span></div>
           <div class="entry"></div>
           <nav class="tabs" role="tablist"></nav>
+          <button class="icon help-btn" aria-label="${this._t("help")}" title="${this._t("help")}" aria-haspopup="dialog">${ICONS.help}</button>
         </header>
         <main class="content"><div class="loading">${MARK}<p>${this._t("loading")}</p></div></main>
         <div class="toast" role="status" aria-live="polite"></div>
         <div class="sheet-root"></div>
       </div>`;
+    this.shadowRoot.querySelector(".help-btn").addEventListener("click", () => this._openHelp());
     if (customElements.get("ha-menu-button")) {
       this._menu = document.createElement("ha-menu-button");
       this._menu.hass = this._hass;
@@ -1386,6 +1473,90 @@ class EvGuestPanel extends HTMLElement {
     render();
   }
 
+  // ------------------------------------------------------------------ help
+
+  /* Small pictures of the parts of the price clock, drawn like the clock itself. */
+  _helpSwatch(kind) {
+    const c = 24;
+    const arc = (r, from, to) => arcPath(c, c, r, from, to);
+    const gradient = `<defs><linearGradient id="help-win-${kind}" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#00B894"/><stop offset="1" stop-color="#A3E635"/></linearGradient></defs>`;
+    const win = `url(#help-win-${kind})`;
+    let body = "";
+    if (kind === "face") {
+      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/>`;
+      for (let h = 0; h < 24; h++) {
+        const [x1, y1] = polar(c, c, 21, h);
+        const [x2, y2] = polar(c, c, h % 6 === 0 ? 16.5 : 19, h);
+        body += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="hs-tick${h % 6 === 0 ? " major" : ""}"/>`;
+      }
+    } else if (kind === "bars") {
+      // A small ring of price bars: cheap night, expensive evening.
+      const prices = [0.5, 0.35, 0.15, 0, 0.05, 0.2, 0.55, 0.8, 0.6, 0.45, 0.7, 1];
+      prices.forEach((t, i) => {
+        const h = i * 2 + 0.25;
+        const [x1, y1] = polar(c, c, 11, h);
+        const [x2, y2] = polar(c, c, 13 + t * 9, h);
+        body += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${priceColor(t)}" stroke-width="4.2" stroke-linecap="butt"/>`;
+      });
+    } else if (kind === "window") {
+      body = `<path d="${arc(15, 19, 23)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="round" opacity=".35"/>
+        <path d="${arc(15, 1, 7)}" fill="none" stroke="#A3E635" stroke-width="7" stroke-linecap="round" opacity=".35" filter="url(#help-glow)"/>
+        <path d="${arc(15, 1, 7)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="round"/>
+        <defs><filter id="help-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2"/></filter></defs>`;
+    } else if (kind === "preview") {
+      body = `<path d="${arc(15, 22, 32)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="butt" pathLength="1" stroke-dasharray=".1 .07" opacity=".9"/>`;
+    } else if (kind === "flow") {
+      body = `<path d="${arc(15, 22, 32)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="round"/>
+        <path d="${arc(15, 22, 32)}" class="hs-flow"/>`;
+    } else if (kind === "needle") {
+      const [x1, y1] = polar(c, c, 5, 2);
+      const [x2, y2] = polar(c, c, 20, 2);
+      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="hs-needle"/><circle cx="${x2}" cy="${y2}" r="2.6" class="hs-needle-dot"/>`;
+    } else if (kind === "deadline") {
+      const [x1, y1] = polar(c, c, 3, 7);
+      const [x2, y2] = polar(c, c, 18, 7);
+      const [fx, fy] = polar(c, c, 21.5, 7);
+      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="hs-deadline"/><circle cx="${fx}" cy="${fy}" r="3" class="hs-deadline-dot"/>`;
+    } else if (kind === "center") {
+      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/><text x="${c}" y="${c}" class="hs-center" text-anchor="middle" dominant-baseline="central">${esc(String(this._state?.currency || "kr").slice(0, 3))}</text>`;
+    }
+    return `<svg class="help-swatch" viewBox="0 0 48 48" aria-hidden="true">${kind === "face" || kind === "needle" || kind === "deadline" || kind === "center" ? "" : gradient}${body}</svg>`;
+  }
+
+  _openHelp() {
+    const root = this.shadowRoot.querySelector(".sheet-root");
+    const opener = this.shadowRoot.querySelector(".help-btn");
+    const clock = ["face", "bars", "window", "preview", "flow", "needle", "deadline", "center"];
+    const features = ["guest", "battery", "settings", "plan", "status", "facts", "charger", "new", "history", "more"];
+    root.innerHTML = `<div class="scrim"></div>
+      <div class="sheet help" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <header><h2 id="help-title">${this._t("help_title")}</h2><button class="icon close" aria-label="${this._t("close")}">${ICONS.close}</button></header>
+        <p class="help-intro">${this._t("help_intro")}</p>
+        <h3>${this._t("help_clock")}</h3>
+        <p class="hint">${this._t("help_clock_intro")}</p>
+        <ul class="help-legend">${clock
+          .map(
+            (key) => `<li>${this._helpSwatch(key)}<div><b>${this._t(`help_${key}`)}</b><span>${this._t(`help_${key}_text`)}</span></div></li>`,
+          )
+          .join("")}</ul>
+        <h3>${this._t("help_features")}</h3>
+        <dl class="help-features">${features
+          .map((key) => `<div><dt>${this._t(`help_f_${key}`)}</dt><dd>${this._t(`help_f_${key}_text`)}</dd></div>`)
+          .join("")}</dl>
+      </div>`;
+    const close = () => {
+      root.innerHTML = "";
+      root.onkeydown = null;
+      opener?.focus();
+    };
+    root.querySelector(".scrim").onclick = close;
+    root.querySelector(".close").onclick = close;
+    root.onkeydown = (ev) => {
+      if (ev.key === "Escape") close();
+    };
+    root.querySelector(".close").focus();
+  }
+
   // ------------------------------------------------------------------ settings tab
 
   _settingsHtml() {
@@ -1600,7 +1771,7 @@ a { color: var(--evg-accent); }
 /* ---------- header */
 .bar {
   position: sticky; top: 0; z-index: 4;
-  display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px;
+  display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 8px;
   padding: calc(6px + var(--evg-safe-top)) 16px 6px 4px;
   min-height: 56px;
   background: var(--app-header-background-color, var(--evg-card));
@@ -1890,6 +2061,29 @@ input[type="range"] { width: 100%; accent-color: var(--evg-a); }
 .receipt .sub { margin: 4px 0 12px; color: var(--evg-soft); display: flex; gap: 8px; align-items: center; }
 .receipt pre { margin: 0; white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.55; }
 .sheet .segmented { margin-bottom: 4px; }
+.sheet.help { width: min(640px, 100%); }
+.sheet.help h3 { margin: 22px 0 6px; font-size: 15px; }
+.help-intro { margin: 10px 0 0; line-height: 1.5; }
+.sheet.help .hint { margin: 0 0 10px; color: var(--evg-soft); font-size: 14px; }
+.help-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.help-legend li { display: grid; grid-template-columns: 48px 1fr; gap: 14px; align-items: start; }
+.help-legend b { display: block; font-weight: 600; margin-bottom: 2px; }
+.help-legend span { color: var(--evg-soft); font-size: 14px; line-height: 1.45; }
+.help-swatch { width: 48px; height: 48px; overflow: visible; }
+.help-swatch .hs-face { fill: color-mix(in srgb, var(--evg-ink) 3%, transparent); stroke: var(--evg-line); }
+.help-swatch .hs-tick { stroke: var(--evg-soft); stroke-opacity: .45; stroke-width: 1.2; }
+.help-swatch .hs-tick.major { stroke-opacity: .9; stroke-width: 2; }
+.help-swatch .hs-flow { fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1.5 5; opacity: .9; animation: flow 1.2s linear infinite; }
+.help-swatch .hs-needle { stroke: var(--evg-ink); stroke-width: 2.2; stroke-linecap: round; }
+.help-swatch .hs-needle-dot { fill: var(--evg-ink); }
+.help-swatch .hs-deadline { stroke: var(--evg-ink); stroke-width: 1.5; stroke-dasharray: 2.5 3; opacity: .6; }
+.help-swatch .hs-deadline-dot { fill: var(--evg-card); stroke: var(--evg-ink); stroke-width: 2; }
+.help-swatch .hs-center { font-size: 10px; font-weight: 650; fill: var(--evg-ink); }
+.help-features { margin: 0; display: grid; gap: 12px; }
+.help-features div { display: grid; grid-template-columns: 170px 1fr; gap: 12px; }
+.help-features dt { font-weight: 600; }
+.help-features dd { margin: 0; color: var(--evg-soft); font-size: 14px; line-height: 1.45; }
+.help-btn { color: var(--app-header-text-color, var(--evg-soft)); }
 @keyframes fade { from { opacity: 0; } }
 @keyframes up { from { transform: translate(-50%, 100%); } }
 
@@ -1900,7 +2094,8 @@ input[type="range"] { width: 100%; accent-color: var(--evg-a); }
   .tabs { position: fixed; left: 0; right: 0; bottom: 0; justify-self: stretch; justify-content: space-around; background: var(--evg-card); border-top: 1px solid var(--evg-line); padding: 6px 8px calc(6px + var(--evg-safe-bottom)); z-index: 5; }
   .tabs button { flex-direction: column; gap: 2px; font-size: 12px; padding: 6px 12px; border-radius: 12px; }
   .tabs button em { position: absolute; top: 2px; right: 6px; }
-  .bar { grid-template-columns: auto 1fr auto; }
+  .bar { grid-template-columns: auto 1fr auto auto; }
+  .help-features div { grid-template-columns: 1fr; gap: 2px; }
   .field { grid-template-columns: 1fr; gap: 8px; }
   .panel { padding: 16px; }
   .sessions li { grid-template-columns: 44px 1fr auto; }

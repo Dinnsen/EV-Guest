@@ -2,6 +2,11 @@
 
 All notable changes to EV Guest. The version is the one in `custom_components/ev_guest/manifest.json`.
 
+## [0.10.1] - 2026-10-17
+
+### Added
+- A **?** button at the top of the panel opens a help sheet. It explains every part of the price clock – the dial, the price bars and their colours, the green arc (glowing, faded, dashed, with moving dots), the hand, the Ready by marker and the centre – and what each part of the panel does. In English and Danish, light and dark, on phone and desktop.
+
 ## [0.10.0] - 2026-10-17
 
 Your charger follows the plan – any charger – and is always handed back when the guest has gone. And you see how far the guest car has come.
