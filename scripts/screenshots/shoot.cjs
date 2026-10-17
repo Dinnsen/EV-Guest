@@ -2,7 +2,8 @@
 
    Needs Node and Playwright with Chromium:
      npm i -D playwright && npx playwright install chromium
-     node scripts/screenshots/shoot.cjs
+     node scripts/screenshots/shoot.cjs              (English, docs/images/en)
+     EVG_LANG=da node scripts/screenshots/shoot.cjs  (Danish, docs/images/da)
 */
 const fs = require("fs");
 const http = require("http");
@@ -10,7 +11,8 @@ const path = require("path");
 const { chromium } = require("playwright");
 
 const ROOT = path.resolve(__dirname, "../..");
-const OUT = path.join(ROOT, "docs", "images");
+const LANG = process.env.EVG_LANG || "en";
+const OUT = path.join(ROOT, "docs", "images", LANG);
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
 // A fixed evening, so the images are the same every time.
 const NOW = new Date("2026-10-15T20:15:00+02:00");
@@ -30,11 +32,11 @@ function serve() {
 
 async function open(browser, base, query, { width, height, scale = 2, motion = "reduce" }) {
   const page = await browser.newPage({
-    viewport: { width, height }, deviceScaleFactor: scale, locale: "da-DK", timezoneId: "Europe/Copenhagen", reducedMotion: motion,
+    viewport: { width, height }, deviceScaleFactor: scale, locale: LANG === "da" ? "da-DK" : "en-GB", timezoneId: "Europe/Copenhagen", reducedMotion: motion,
   });
   await page.clock.setFixedTime(NOW);
   page.on("pageerror", (err) => console.error("page error:", err.message));
-  await page.goto(`${base}/scripts/screenshots/demo.html?${query}`);
+  await page.goto(`${base}/scripts/screenshots/demo.html?${query}&lang=${LANG}`);
   await page.waitForSelector('body[data-ready="1"]');
   return page;
 }
@@ -61,7 +63,6 @@ async function shot(page, selector, file, pad = 0) {
     let page = await open(browser, base, "scene=planned&theme=light", desktop);
     await page.screenshot({ path: path.join(OUT, "panel.png") });
     console.log("wrote panel.png");
-    await shot(page, ".hero", "dial.png", 8);
     await shot(page, ".guest", "guest.png");
     await shot(page, ".charging", "charging.png");
     await shot(page, ".prices", "prices.png");
@@ -103,7 +104,7 @@ async function shot(page, selector, file, pad = 0) {
 
   if (!only || only === "hero") {
     const page = await browser.newPage({ viewport: { width: 1600, height: 820 }, deviceScaleFactor: 1.5 });
-    await page.goto(`${base}/scripts/screenshots/hero.html`);
+    await page.goto(`${base}/scripts/screenshots/hero.html?lang=${LANG}`);
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(OUT, "hero.png") });
     console.log("wrote hero.png");

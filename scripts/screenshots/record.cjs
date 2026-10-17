@@ -1,7 +1,8 @@
-/* Records docs/images/plan.gif: drag the battery, watch the plan move on the price clock, make the plan.
+/* Records docs/images/<lang>/plan.gif: drag the battery, watch the plan move on the price clock, make the plan.
 
    Needs Node, Playwright with Chromium and Python with Pillow:
-     node scripts/screenshots/record.cjs
+     node scripts/screenshots/record.cjs              (English)
+     EVG_LANG=da node scripts/screenshots/record.cjs  (Danish)
 */
 const fs = require("fs");
 const http = require("http");
@@ -12,6 +13,7 @@ const { chromium } = require("playwright");
 
 const ROOT = path.resolve(__dirname, "../..");
 const NOW = new Date("2026-10-15T20:15:00+02:00");
+const LANG = process.env.EVG_LANG || "en";
 const TYPES = { ".html": "text/html", ".js": "text/javascript" };
 
 function serve() {
@@ -28,9 +30,9 @@ function serve() {
   const frames = fs.mkdtempSync(path.join(os.tmpdir(), "evg-frames-"));
   const server = await serve();
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1180, height: 900 }, deviceScaleFactor: 1, locale: "da-DK", timezoneId: "Europe/Copenhagen" });
+  const page = await browser.newPage({ viewport: { width: 1180, height: 900 }, deviceScaleFactor: 1, locale: LANG === "da" ? "da-DK" : "en-GB", timezoneId: "Europe/Copenhagen" });
   await page.clock.setFixedTime(NOW);
-  await page.goto(`http://127.0.0.1:${server.address().port}/scripts/screenshots/demo.html?scene=planned&theme=light`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/scripts/screenshots/demo.html?scene=planned&theme=light&lang=${LANG}`);
   await page.waitForSelector('body[data-ready="1"]');
   const panel = page.locator("ev-guest-panel");
   const hero = await panel.locator(".hero").boundingBox();
@@ -64,7 +66,7 @@ function serve() {
   await hold(6);
   await drag(20, 45, 14); // more charge already: the window shrinks
   await hold(6);
-  await panel.locator(".chips.deadline button", { hasText: "06:00" }).click();
+  await panel.locator(".chips.deadline button", { hasText: /^06[:.]00$/ }).click();
   await hold(6);
   await panel.locator(".calc").click();
   await hold(22); // sweep and count up
@@ -82,6 +84,6 @@ pal = imgs[len(imgs) // 2].quantize(colors=160, method=Image.Quantize.MEDIANCUT)
 q = [i.quantize(palette=pal, dither=Image.Dither.NONE) for i in imgs]
 q[0].save(sys.argv[2], save_all=True, append_images=q[1:], duration=[70] * (len(q) - 1) + [2200], loop=0, optimize=True)
 print(len(q), "frames")
-`, frames, path.join(ROOT, "docs", "images", "plan.gif")], { stdio: "inherit" });
+`, frames, path.join(ROOT, "docs", "images", LANG, "plan.gif")], { stdio: "inherit" });
   fs.rmSync(frames, { recursive: true, force: true });
 })();

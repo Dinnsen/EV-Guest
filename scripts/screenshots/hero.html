@@ -20,9 +20,14 @@
 <body>
   <div class="copy">
     <div class="lock"><img src="../../docs/brand/mark.svg" alt=""><b><span>EV</span> Guest</b></div>
-    <p>The cheapest hours to charge your guest’s car – no car integration needed.</p>
-    <ul><li>License plate lookup</li><li>Cheapest plan before a deadline</li><li>Savings, history and a bill for the guest</li></ul>
+    <p data-en="The cheapest hours to charge your guest’s car – no car integration needed." data-da="De billigste timer til at lade gæstens bil – uden at bilen skal ind i Home Assistant."></p>
+    <ul><li data-en="License plate lookup" data-da="Opslag på nummerplade"></li><li data-en="Cheapest plan before a deadline" data-da="Billigste plan før en frist"></li><li data-en="Savings, history and a bill for the guest" data-da="Besparelse, historik og afregning med gæsten"></li></ul>
   </div>
-  <div class="desk"><img src="../../docs/images/panel.png" alt=""></div>
-  <div class="phone"><img src="../../docs/images/phone-charging.png" alt=""></div>
+  <div class="desk"><img data-src="panel.png" alt=""></div>
+  <div class="phone"><img data-src="phone-charging.png" alt=""></div>
+  <script>
+    const lang = new URLSearchParams(location.search).get("lang") || "en";
+    document.querySelectorAll("[data-en]").forEach((el) => (el.textContent = el.dataset[lang]));
+    document.querySelectorAll("[data-src]").forEach((el) => (el.src = `../../docs/images/${lang}/${el.dataset.src}`));
+  </script>
 </body></html>
