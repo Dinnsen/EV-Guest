@@ -2,6 +2,11 @@
 
 All notable changes to EV Guest. The version is the one in `custom_components/ev_guest/manifest.json`.
 
+## [0.10.2] - 2026-10-17
+
+### Fixed
+- The home-screen app's web manifest is now `app/app.webmanifest` instead of `app/manifest.json`. HACS finds an integration by the only file named `manifest.json` in the repository, so the second one made the HACS checks (hassfest and core domain conflict) fail. A test now keeps it that way. If you added the app to your home screen, it keeps working; add it again only if its icon or name looks wrong.
+
 ## [0.10.1] - 2026-10-17
 
 ### Added
