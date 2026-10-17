@@ -15,7 +15,11 @@ from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, Home
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_point_in_time, async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_point_in_time,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -76,6 +80,7 @@ from .const import (
     ISSUE_PRICE_ENTITY_MISSING,
     METER_GRACE,
     PLANNING_HORIZON,
+    PROGRESS_INTERVAL,
     RESULT_CAR_BATTERY_CAPACITY,
     RESULT_CAR_BRAND,
     RESULT_CAR_MODEL,
@@ -106,6 +111,7 @@ from .planner import (
     segments_to_schedule,
 )
 from .prices import extract_price_slots
+from .progress import Progress, plan_progress
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -172,6 +178,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self._unsub: list[CALLBACK_TYPE] = []
         self._availability_logged: dict[str, bool] = {}
         self._boundary_callbacks: list[CALLBACK_TYPE] = []
+        # Updates the estimated charge level while a charging period runs.
+        self._progress_tick: CALLBACK_TYPE | None = None
         # Planned charging intervals. This is the source of truth for
         # charge_now and the plan sensors; charging_schedule is per price
         # slot and only meant for graphs.
@@ -292,6 +300,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         while self._unsub:
             self._unsub.pop()()
         self._cancel_plan_boundaries()
+        self._stop_progress_tick()
         # Write now instead of after the save delay: a reload (e.g. after an
         # options change) would otherwise load the state from before.
         await self._store.async_save(self._data_to_store())
@@ -749,6 +758,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 self._boundary_callbacks.append(
                     async_track_point_in_time(self.hass, self._handle_plan_boundary, moment)
                 )
+        self._update_progress_tick(now)
 
     @callback
     def _cancel_plan_boundaries(self) -> None:
@@ -758,6 +768,30 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     @callback
     def _handle_plan_boundary(self, now: datetime) -> None:
         self._maybe_record(now)
+        self._update_progress_tick(now)
+        self.async_update_listeners()
+
+    @callback
+    def _update_progress_tick(self, now: datetime) -> None:
+        """Tick every minute while charging, so the estimated charge level moves."""
+        if self.is_charge_now(now):
+            if self._progress_tick is None:
+                self._progress_tick = async_track_time_interval(
+                    self.hass, self._handle_progress_tick, PROGRESS_INTERVAL
+                )
+        else:
+            self._stop_progress_tick()
+
+    @callback
+    def _stop_progress_tick(self) -> None:
+        if self._progress_tick is not None:
+            self._progress_tick()
+            self._progress_tick = None
+
+    @callback
+    def _handle_progress_tick(self, _now: datetime) -> None:
+        # The tick is stopped at the end of each charging period and whenever
+        # the plan changes (see _schedule_plan_boundaries).
         self.async_update_listeners()
 
     def is_plan_locked(self, now: datetime | None = None) -> bool:
@@ -770,6 +804,21 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     def is_charge_now(self, now: datetime | None = None) -> bool:
         now = now or dt_util.now()
         return any(segment["start"] <= now < segment["end"] for segment in self._plan_segments)
+
+    def progress(self, now: datetime | None = None) -> Progress | None:
+        """The estimated charge level of the guest car, from the plan or the meter.
+
+        EV Guest never sees the car's live charge level. Without an energy
+        meter the estimate follows the plan; with one it follows the energy
+        actually delivered. None without a plan (or for a plan from before
+        0.9.0, which did not store its inputs).
+        """
+        measured = None
+        if self.energy_entity:
+            value = self.data.results.get(RESULT_MEASURED_ENERGY)
+            measured = float(value) if isinstance(value, int | float) else None
+        inputs = (self._plan_info or {}).get("inputs")
+        return plan_progress(self._plan_segments, inputs, now or dt_util.now(), measured)
 
     # ------------------------------------------------------------------
     # Energy meter

@@ -2,6 +2,17 @@
 
 All notable changes to EV Guest. The version is the one in `custom_components/ev_guest/manifest.json`.
 
+## [0.10.0] - 2026-10-17
+
+How far the guest car has come – without the car in Home Assistant.
+
+### Added
+- **Estimated SoC** (`sensor.ev_guest_estimated_soc`): the guest car's estimated charge level, from the plan without an energy meter and from the measured energy with one. Updated every minute while the car charges.
+- **Behind plan** (`binary_sensor.ev_guest_behind_plan`), only with an energy meter: on when the charger has delivered clearly less than planned.
+- The panel shows the measured charge level and warns when the car is behind its plan.
+
+See [the release notes](docs/releases/v0.10.0.md).
+
 ## [0.9.0] - 2026-10-17
 
 The EV Guest panel: everything in one place in the sidebar, with no custom cards.

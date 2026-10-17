@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
-from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfTime
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfEnergy, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
@@ -27,7 +27,12 @@ from .const import (
     ATTR_MODEL_YEAR,
     ATTR_PLAN_LOCKED,
     ATTR_PLAN_MODE,
+    ATTR_PLANNED_ENERGY,
+    ATTR_PLANNED_SOC,
     ATTR_RAW_TWO_DAYS,
+    ATTR_SOURCE,
+    ATTR_START_SOC,
+    ATTR_TARGET_SOC,
     ATTR_VIN,
     RESULT_CAR_BATTERY_CAPACITY,
     RESULT_CAR_BRAND,
@@ -39,6 +44,7 @@ from .const import (
     RESULT_CHARGE_TIME,
     RESULT_CHARGING_SPEED,
     RESULT_ENERGY,
+    RESULT_ESTIMATED_SOC,
     RESULT_MEASURED_COST,
     RESULT_MEASURED_ENERGY,
     RESULT_SAVINGS,
@@ -63,6 +69,11 @@ class EVGuestSensorEntityDescription(SensorEntityDescription):
 
 def _result(key: str) -> Callable[[EVGuestCoordinator], StateType]:
     return lambda coordinator: coordinator.data.results.get(key)
+
+
+def _estimated_soc(coordinator: EVGuestCoordinator) -> StateType:
+    progress = coordinator.progress()
+    return None if progress is None else round(progress.soc, 1)
 
 
 SENSORS: tuple[EVGuestSensorEntityDescription, ...] = (
@@ -125,6 +136,14 @@ SENSORS: tuple[EVGuestSensorEntityDescription, ...] = (
         monetary=True,
         needs_meter=True,
         value_fn=_result(RESULT_MEASURED_COST),
+    ),
+    EVGuestSensorEntityDescription(
+        key=RESULT_ESTIMATED_SOC,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        value_fn=_estimated_soc,
     ),
     EVGuestSensorEntityDescription(
         key=RESULT_STATUS,
@@ -202,6 +221,17 @@ class EVGuestSensor(EVGuestEntity, SensorEntity):
             return {
                 ATTR_CHARGE_NOW_COST: results.get(ATTR_CHARGE_NOW_COST),
                 ATTR_AVERAGE_PRICE: results.get(ATTR_AVERAGE_PRICE),
+            }
+        if self.entity_description.key == RESULT_ESTIMATED_SOC:
+            progress = self.coordinator.progress()
+            if progress is None:
+                return None
+            return {
+                ATTR_SOURCE: progress.source,
+                ATTR_START_SOC: progress.start_soc,
+                ATTR_TARGET_SOC: progress.target_soc,
+                ATTR_PLANNED_SOC: round(progress.planned_soc, 1),
+                ATTR_PLANNED_ENERGY: round(progress.planned_energy, 2),
             }
         if self.entity_description.key != RESULT_STATUS:
             return None

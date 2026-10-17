@@ -17,7 +17,7 @@ PLATFORMS: list[Platform] = [
     Platform.TEXT,
     Platform.TIME,
 ]
-USER_AGENT = "EVGuestHomeAssistant/0.9.0 (+https://github.com/Dinnsen/EV-Guest)"
+USER_AGENT = "EVGuestHomeAssistant/0.10.0 (+https://github.com/Dinnsen/EV-Guest)"
 
 MOTORAPI_BASE_URL = "https://v1.motorapi.dk"
 NHTSA_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/{vin}?format=json"
@@ -71,8 +71,10 @@ RESULT_ENERGY = "energy"
 RESULT_SAVINGS = "savings"
 RESULT_MEASURED_ENERGY = "measured_energy"
 RESULT_MEASURED_COST = "measured_cost"
+RESULT_ESTIMATED_SOC = "estimated_soc"
 
 DIAGNOSTIC_CHARGE_NOW = "charge_now"
+DIAGNOSTIC_BEHIND_PLAN = "behind_plan"
 
 # Status sensor (enum): the state of the current plan, or why the last
 # calculation failed. Lookup errors are only raised as action errors.
@@ -117,6 +119,11 @@ ATTR_PLAN_LOCKED = "plan_locked"
 ATTR_ERROR_DETAIL = "error_detail"
 ATTR_CHARGE_NOW_COST = "charge_now_cost"
 ATTR_AVERAGE_PRICE = "average_price"
+ATTR_SOURCE = "source"
+ATTR_START_SOC = "start_soc"
+ATTR_TARGET_SOC = "target_soc"
+ATTR_PLANNED_SOC = "planned_soc"
+ATTR_PLANNED_ENERGY = "planned_energy"
 
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.{{entry_id}}"
@@ -136,6 +143,8 @@ DATASET_CACHE_TTL = timedelta(hours=24)
 PLANNING_HORIZON = timedelta(hours=48)
 # The energy meter is followed this long after a plan ends, for late readings.
 METER_GRACE = timedelta(minutes=10)
+# While the car charges, the estimated charge level is updated this often.
+PROGRESS_INTERVAL = timedelta(minutes=1)
 
 SERVICE_GRAB_CAR_DATA = "grab_car_data"
 SERVICE_CALCULATE = "calculate"

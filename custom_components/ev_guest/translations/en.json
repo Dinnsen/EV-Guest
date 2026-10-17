@@ -78,6 +78,9 @@
     "binary_sensor": {
       "charge_now": {
         "name": "Charge now"
+      },
+      "behind_plan": {
+        "name": "Behind plan"
       }
     },
     "button": {
@@ -135,6 +138,30 @@
       },
       "car_battery_capacity": {
         "name": "Car battery capacity"
+      },
+      "estimated_soc": {
+        "name": "Estimated SoC",
+        "state_attributes": {
+          "source": {
+            "name": "Source",
+            "state": {
+              "plan": "Plan",
+              "meter": "Energy meter"
+            }
+          },
+          "start_soc": {
+            "name": "SoC at start"
+          },
+          "target_soc": {
+            "name": "Target SoC"
+          },
+          "planned_soc": {
+            "name": "Planned SoC"
+          },
+          "planned_energy": {
+            "name": "Planned energy"
+          }
+        }
       },
       "status": {
         "name": "Status",

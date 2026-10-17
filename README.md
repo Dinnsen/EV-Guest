@@ -69,6 +69,8 @@ Every finished charge is kept, with totals for energy, cost and savings. **Bill*
 
 Pick your charger's energy meter in the integration options, and EV Guest measures the energy and cost actually used while the plan runs. The bill and the history then use the measured figures.
 
+While the car charges, **Estimated SoC** shows how far it has come – from the plan, or from the meter when you have one. With a meter, **Behind plan** turns on when the car takes clearly less than planned, so you know in time that it may not reach the target. No meter? Everything else works the same.
+
 ### Light and dark, desktop and phone
 
 <img src="docs/images/en/panel-dark.png" alt="The panel in dark mode while a car is charging" width="100%">
@@ -160,6 +162,8 @@ Everything in the panel is also available as entities, for automations and dashb
 | Calculate | Button | Make a new plan. |
 | New guest | Button | Clear the guest and the plan, ready for the next car. |
 | Charge now | Binary sensor | On exactly while the plan says charge. |
+| Behind plan | Binary sensor (problem) | Only with an energy meter: on when the charger has delivered clearly less than planned (below 80 % and at least 1 kWh short, after 20 minutes of charging). |
+| Estimated SoC | Sensor (%) | The guest car's estimated charge level: from the plan, or from the energy meter when one is set. Attributes: `source` (`plan`/`meter`), `start_soc`, `target_soc`, `planned_soc`, `planned_energy`. |
 | Status | Sensor (enum) | *Ready*, *Planned*, *Charging*, *Completed*, or why the last calculation failed. |
 | Charge start time / Charge end time | Sensor (timestamp) | Start of the first and end of the last charging period. |
 | Charge time | Sensor (duration) | Total charging time. |
@@ -227,6 +231,7 @@ Charging speed and completion time are settings inside EV Smart Charging. Copy t
 - **Energy and time.** Energy into the battery = capacity × (target − now). From the grid that is divided by the charging efficiency (default 90 %), and the charging time is the grid energy divided by the charger power.
 - **The cheapest plan.** EV Guest tries every period that fits before the deadline – also one that starts in the price period running now, and one that ends exactly at a price change – and keeps the cheapest. With *cheapest periods*, the cheapest price periods are used and a remaining part sits next to one of them, so the charging is not cut up more than needed.
 - **Savings** compare the plan with charging from now with the same energy.
+- **Estimated charge level.** EV Guest never sees the car. Without a meter, the estimate is the plan's start level plus the charging time that has passed × charger power × efficiency, never above the target. With a meter, it is the start level plus the measured energy × efficiency. It is updated every minute while the car charges.
 - **Plans that behave.** A plan follows new prices (for example when tomorrow's prices arrive) until it starts. Once it has started it is locked: EV Guest never sees the car's live charge level, and a plan that moved while charging would charge twice. Tap **Make plan** to plan again.
 - **No polling.** EV Guest updates when you change something, when the price sensor changes and exactly when a charging period starts or ends. The lookup only contacts MotorAPI, NHTSA and Open EV Data when you tap **Look up**; the Open EV Data list is fetched at most once a day.
 - **History.** A plan is added to the history ten minutes after it ends (so late meter readings count), or right away when you tap **New guest** or plan a new car. Plans you replace before they finish are not kept.
@@ -248,7 +253,8 @@ Use a sensor with the prices you actually pay (with tariffs and taxes) to get th
 - License plate lookup works in Denmark only. Without it, set the battery capacity yourself.
 - The battery match from Open EV Data is a best guess; check it, especially for rare variants.
 - Charging is assumed to run at the set power the whole time; real cars slow down near full. A target of 80–90 % keeps the plan close to reality.
-- EV Guest does not see the car's live charge level.
+- EV Guest does not see the car's live charge level. *Estimated SoC* is an estimate from the plan or the meter.
+- Some chargers report their energy meter only now and then. *Behind plan* can then turn on for a while until the next reading.
 - Home Assistant's own Nord Pool integration has no price attributes; use the Nord Pool integration from HACS or Energi Data Service.
 - The energy meter measures everything on that meter while the plan runs – also another car on the same charger.
 

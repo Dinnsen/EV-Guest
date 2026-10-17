@@ -78,6 +78,9 @@
     "binary_sensor": {
       "charge_now": {
         "name": "Lad nu"
+      },
+      "behind_plan": {
+        "name": "Bagud ift. plan"
       }
     },
     "button": {
@@ -135,6 +138,30 @@
       },
       "car_battery_capacity": {
         "name": "Bilens batterikapacitet"
+      },
+      "estimated_soc": {
+        "name": "Estimeret SoC",
+        "state_attributes": {
+          "source": {
+            "name": "Kilde",
+            "state": {
+              "plan": "Plan",
+              "meter": "Energimåler"
+            }
+          },
+          "start_soc": {
+            "name": "SoC ved start"
+          },
+          "target_soc": {
+            "name": "Mål-SoC"
+          },
+          "planned_soc": {
+            "name": "Planlagt SoC"
+          },
+          "planned_energy": {
+            "name": "Planlagt energi"
+          }
+        }
       },
       "status": {
         "name": "Status",

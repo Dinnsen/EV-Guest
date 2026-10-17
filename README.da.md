@@ -69,6 +69,8 @@ Hver afsluttet opladning gemmes, med samlet energi, pris og besparelse. **Afregn
 
 Vælg laderens elmåler i integrationens indstillinger, så måler EV Guest den energi og pris, der faktisk bruges, mens planen kører. Afregning og historik bruger så de målte tal.
 
+Mens bilen lader, viser **Estimeret SoC**, hvor langt den er nået – ud fra planen, eller ud fra måleren hvis du har en. Med en måler tænder **Bagud ift. plan**, når bilen tager tydeligt mindre end planlagt, så du i tide ved, at den måske ikke når målet. Ingen måler? Alt andet virker på samme måde.
+
 ### Lyst og mørkt, computer og telefon
 
 <img src="docs/images/da/panel-dark.png" alt="Panelet i mørk tilstand, mens en bil lader" width="100%">
@@ -160,6 +162,8 @@ Alt i panelet findes også som entiteter til automationer og dashboards. Entitet
 | Beregn | Knap | Lav en ny plan. |
 | Ny gæst | Knap | Ryd gæst og plan, klar til næste bil. |
 | Lad nu | Binær sensor | Tændt præcis mens planen siger lad. |
+| Bagud ift. plan | Binær sensor (problem) | Kun med elmåler: tændt når laderen har leveret tydeligt mindre end planlagt (under 80 % og mindst 1 kWh for lidt, efter 20 minutters opladning). |
+| Estimeret SoC | Sensor (%) | Gæstebilens estimerede ladeniveau: ud fra planen, eller ud fra elmåleren hvis der er valgt en. Attributter: `source` (`plan`/`meter`), `start_soc`, `target_soc`, `planned_soc`, `planned_energy`. |
 | Status | Sensor (enum) | *Klar*, *Planlagt*, *Lader*, *Færdig*, eller hvorfor seneste beregning fejlede. |
 | Ladestart / Ladeslut | Sensor (tidsstempel) | Start på første og slut på sidste ladeperiode. |
 | Ladetid | Sensor (varighed) | Samlet ladetid. |
@@ -214,6 +218,7 @@ Ladehastighed og frist er indstillinger i EV Smart Charging. Kopiér dem med en 
 - **Energi og tid.** Energi i batteriet = kapacitet × (mål − nu). Fra nettet divideres med ladeeffektiviteten (standard 90 %), og ladetiden er energien fra nettet divideret med ladeeffekten.
 - **Den billigste plan.** EV Guest prøver alle perioder, der kan nå at blive færdige før fristen – også én, der starter i den prisperiode, der kører nu, og én, der slutter præcis ved et prisskift – og beholder den billigste. Med *billigste perioder* bruges de billigste prisperioder, og en rest lægges op ad en af dem, så opladningen ikke deles mere op end nødvendigt.
 - **Besparelsen** sammenligner planen med at lade den samme energi fra nu af.
+- **Estimeret ladeniveau.** EV Guest ser aldrig bilen. Uden måler er estimatet planens startniveau plus den ladetid, der er gået × ladeeffekt × effektivitet, aldrig over målet. Med måler er det startniveauet plus den målte energi × effektivitet. Det opdateres hvert minut, mens bilen lader.
 - **Planer der opfører sig.** En plan følger nye priser (fx når morgendagens priser kommer), indtil den starter. Når den er startet, låses den: EV Guest ser aldrig bilens aktuelle ladeniveau, og en plan der flyttede sig under opladningen, ville lade to gange. Tryk **Beregn plan** for at planlægge igen.
 - **Ingen polling.** EV Guest opdaterer, når du ændrer noget, når prissensoren ændrer sig, og præcis når en ladeperiode starter eller slutter. Opslaget kontakter kun MotorAPI, NHTSA og Open EV Data, når du trykker **Slå op**; listen fra Open EV Data hentes højst én gang i døgnet.
 - **Historik.** En plan gemmes i historikken ti minutter efter den slutter (så sene målinger kommer med), eller med det samme når du trykker **Ny gæst** eller planlægger en ny bil. Planer, du erstatter før de er færdige, gemmes ikke.
@@ -235,7 +240,8 @@ Brug en sensor med de priser, du faktisk betaler (med nettarif og afgifter), for
 - Opslag på nummerplade virker kun i Danmark. Uden det sætter du batterikapaciteten selv.
 - Batteriet fra Open EV Data er et bedste gæt; tjek det, især for sjældne varianter.
 - Opladningen regnes med fuld effekt hele tiden; rigtige biler lader langsommere tæt på fuldt. Et mål på 80–90 % holder planen tæt på virkeligheden.
-- EV Guest ser ikke bilens aktuelle ladeniveau.
+- EV Guest ser ikke bilens aktuelle ladeniveau. *Estimeret SoC* er et estimat ud fra planen eller måleren.
+- Nogle ladere opdaterer kun deres elmåler en gang imellem. *Bagud ift. plan* kan så være tændt et stykke tid indtil næste aflæsning.
 - Home Assistants egen Nord Pool-integration har ingen pris-attributter; brug Nord Pool fra HACS eller Energi Data Service.
 - Elmåleren måler alt på måleren, mens planen kører – også en anden bil på samme lader.
 

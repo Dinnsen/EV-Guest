@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 import functools
 from typing import Any
 
@@ -92,6 +93,19 @@ def _errors(func: _Handler) -> _Handler:
     return wrapper
 
 
+def _progress(coordinator: EVGuestCoordinator, now: datetime) -> dict[str, Any] | None:
+    """The estimated charge level of the guest car, for the battery in the panel."""
+    progress = coordinator.progress(now)
+    if progress is None:
+        return None
+    return {
+        "soc": round(progress.soc, 1),
+        "source": progress.source,
+        "planned_soc": round(progress.planned_soc, 1),
+        "behind_plan": progress.behind_plan,
+    }
+
+
 def panel_state(hass: HomeAssistant, coordinator: EVGuestCoordinator) -> dict[str, Any]:
     """Everything the panel shows, for one EV Guest."""
     now = dt_util.now()
@@ -134,6 +148,7 @@ def panel_state(hass: HomeAssistant, coordinator: EVGuestCoordinator) -> dict[st
             "info": coordinator.plan_info,
             "measured_energy": results.get(RESULT_MEASURED_ENERGY),
             "measured_cost": results.get(RESULT_MEASURED_COST),
+            "progress": _progress(coordinator, now),
         },
         "prices": [
             {"start": slot.start.isoformat(), "end": slot.end.isoformat(), "price": slot.price} for slot in slots
