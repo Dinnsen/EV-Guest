@@ -6,6 +6,12 @@
         "state": {
           "on": "mdi:ev-plug-type2"
         }
+      },
+      "behind_plan": {
+        "default": "mdi:timer-check-outline",
+        "state": {
+          "on": "mdi:timer-alert-outline"
+        }
       }
     },
     "button": {
@@ -51,6 +57,17 @@
       },
       "charge_costs": {
         "default": "mdi:cash"
+      },
+      "estimated_soc": {
+        "default": "mdi:battery-clock-outline"
+      },
+      "charger_control": {
+        "default": "mdi:ev-station",
+        "state": {
+          "released": "mdi:lock-open-variant-outline",
+          "charge": "mdi:ev-plug-type2",
+          "pause": "mdi:pause-circle-outline"
+        }
       },
       "status": {
         "default": "mdi:information-outline",

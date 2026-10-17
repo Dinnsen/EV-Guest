@@ -7,14 +7,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
-from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfTime
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfEnergy, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .const import (
     ATTR_AVERAGE_PRICE,
+    ATTR_CAR_CONNECTED,
     ATTR_CHARGE_NOW_COST,
     ATTR_CHARGING_SCHEDULE,
     ATTR_CHARGING_SEGMENTS,
@@ -27,8 +28,17 @@ from .const import (
     ATTR_MODEL_YEAR,
     ATTR_PLAN_LOCKED,
     ATTR_PLAN_MODE,
+    ATTR_PLANNED_ENERGY,
+    ATTR_PLANNED_SOC,
     ATTR_RAW_TWO_DAYS,
+    ATTR_RELEASE_REASON,
+    ATTR_RELEASED_AT,
+    ATTR_SESSION_ENDS,
+    ATTR_SOURCE,
+    ATTR_START_SOC,
+    ATTR_TARGET_SOC,
     ATTR_VIN,
+    CONTROL_OPTIONS,
     RESULT_CAR_BATTERY_CAPACITY,
     RESULT_CAR_BRAND,
     RESULT_CAR_MODEL,
@@ -37,8 +47,10 @@ from .const import (
     RESULT_CHARGE_END_TIME,
     RESULT_CHARGE_START_TIME,
     RESULT_CHARGE_TIME,
+    RESULT_CHARGER_CONTROL,
     RESULT_CHARGING_SPEED,
     RESULT_ENERGY,
+    RESULT_ESTIMATED_SOC,
     RESULT_MEASURED_COST,
     RESULT_MEASURED_ENERGY,
     RESULT_SAVINGS,
@@ -63,6 +75,11 @@ class EVGuestSensorEntityDescription(SensorEntityDescription):
 
 def _result(key: str) -> Callable[[EVGuestCoordinator], StateType]:
     return lambda coordinator: coordinator.data.results.get(key)
+
+
+def _estimated_soc(coordinator: EVGuestCoordinator) -> StateType:
+    progress = coordinator.progress()
+    return None if progress is None else round(progress.soc, 1)
 
 
 SENSORS: tuple[EVGuestSensorEntityDescription, ...] = (
@@ -125,6 +142,20 @@ SENSORS: tuple[EVGuestSensorEntityDescription, ...] = (
         monetary=True,
         needs_meter=True,
         value_fn=_result(RESULT_MEASURED_COST),
+    ),
+    EVGuestSensorEntityDescription(
+        key=RESULT_ESTIMATED_SOC,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        value_fn=_estimated_soc,
+    ),
+    EVGuestSensorEntityDescription(
+        key=RESULT_CHARGER_CONTROL,
+        device_class=SensorDeviceClass.ENUM,
+        options=CONTROL_OPTIONS,
+        value_fn=lambda coordinator: coordinator.charger_control(),
     ),
     EVGuestSensorEntityDescription(
         key=RESULT_STATUS,
@@ -202,6 +233,27 @@ class EVGuestSensor(EVGuestEntity, SensorEntity):
             return {
                 ATTR_CHARGE_NOW_COST: results.get(ATTR_CHARGE_NOW_COST),
                 ATTR_AVERAGE_PRICE: results.get(ATTR_AVERAGE_PRICE),
+            }
+        if self.entity_description.key == RESULT_ESTIMATED_SOC:
+            progress = self.coordinator.progress()
+            if progress is None:
+                return None
+            return {
+                ATTR_SOURCE: progress.source,
+                ATTR_START_SOC: progress.start_soc,
+                ATTR_TARGET_SOC: progress.target_soc,
+                ATTR_PLANNED_SOC: round(progress.planned_soc, 1),
+                ATTR_PLANNED_ENERGY: round(progress.planned_energy, 2),
+            }
+        if self.entity_description.key == RESULT_CHARGER_CONTROL:
+            release = self.coordinator.release_info()
+            active = self.coordinator.session_active()
+            plan_end = self.coordinator.plan_end
+            return {
+                ATTR_SESSION_ENDS: plan_end.isoformat() if active and plan_end else None,
+                ATTR_RELEASED_AT: release["at"] if release else None,
+                ATTR_RELEASE_REASON: release["reason"] if release else None,
+                ATTR_CAR_CONNECTED: self.coordinator.car_connected,
             }
         if self.entity_description.key != RESULT_STATUS:
             return None

@@ -16,6 +16,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.ev_guest import api
 from custom_components.ev_guest.const import CONF_CURRENCY, CONF_ENERGY_ENTITY, DOMAIN, STORAGE_KEY
 from custom_components.ev_guest.diagnostics import async_get_config_entry_diagnostics
+from custom_components.ev_guest.websocket import panel_state
 
 from .conftest import CONTINUOUS_PRICES, set_prices
 
@@ -237,3 +238,79 @@ async def test_open_ev_data_is_cached(hass: HomeAssistant, aioclient_mock: Aioht
 
     assert first.battery_capacity == second.battery_capacity == 75
     assert aioclient_mock.call_count == 1
+
+
+ESTIMATED_SOC = "sensor.ev_guest_estimated_soc"
+BEHIND_PLAN = "binary_sensor.ev_guest_behind_plan"
+
+
+async def test_estimated_soc_follows_the_plan_without_a_meter(
+    hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime, freezer: FrozenDateTimeFactory
+) -> None:
+    assert hass.states.get(ESTIMATED_SOC).state == "unknown"
+    # The behind-plan sensor needs an energy meter.
+    assert hass.states.get(BEHIND_PLAN) is None
+
+    await _press(hass, "calculate")  # 20 % → 80 %, from 22:00
+    state = hass.states.get(ESTIMATED_SOC)
+    assert float(state.state) == 20
+    assert state.attributes["source"] == "plan"
+    assert state.attributes["start_soc"] == 20
+    assert state.attributes["target_soc"] == 80
+    assert state.attributes["unit_of_measurement"] == "%"
+
+    # Changing the inputs after planning does not change the estimate.
+    await hass.services.async_call(
+        "number", "set_value", {ATTR_ENTITY_ID: "number.ev_guest_soc_state_of_charge", "value": 50}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert float(hass.states.get(ESTIMATED_SOC).state) == 20
+
+    await _move(hass, freezer, now + timedelta(hours=3))  # 23:00, one hour of charging
+    assert _value(hass, ESTIMATED_SOC) == pytest.approx(20 + 11 * 0.9 / 77 * 100, abs=0.05)
+
+    # It keeps moving while the car charges, without other updates.
+    await _move(hass, freezer, now + timedelta(hours=3, minutes=30))
+    state = hass.states.get(ESTIMATED_SOC)
+    assert float(state.state) == pytest.approx(20 + 16.5 * 0.9 / 77 * 100, abs=0.05)
+    assert state.attributes["planned_energy"] == pytest.approx(16.5)
+
+    progress = panel_state(hass, init_integration.runtime_data)["plan"]["progress"]
+    assert progress["source"] == "plan"
+    assert progress["behind_plan"] is None
+
+    # After the plan: the target.
+    await _move(hass, freezer, now + timedelta(hours=8))
+    assert _value(hass, ESTIMATED_SOC) == pytest.approx(80)
+
+    await _press(hass, "new_guest")
+    assert hass.states.get(ESTIMATED_SOC).state == "unknown"
+    assert panel_state(hass, init_integration.runtime_data)["plan"]["progress"] is None
+
+
+async def test_estimated_soc_and_behind_plan_with_a_meter(
+    hass: HomeAssistant, metered_integration: MockConfigEntry, now: datetime, freezer: FrozenDateTimeFactory
+) -> None:
+    assert hass.states.get(BEHIND_PLAN).state == "unknown"
+    await _press(hass, "calculate")
+    assert hass.states.get(BEHIND_PLAN).state == "off"
+    assert hass.states.get(ESTIMATED_SOC).attributes["source"] == "meter"
+
+    # One hour into the plan the charger has delivered only 3 of 11 kWh.
+    await _move(hass, freezer, now + timedelta(hours=3))
+    hass.states.async_set(METER, "1003.0", {"unit_of_measurement": "kWh"})
+    await hass.async_block_till_done()
+    assert _value(hass, ESTIMATED_SOC) == pytest.approx(20 + 3 * 0.9 / 77 * 100, abs=0.05)
+    assert hass.states.get(BEHIND_PLAN).state == "on"
+    state = hass.states.get(ESTIMATED_SOC)
+    assert state.attributes["planned_soc"] == pytest.approx(20 + 11 * 0.9 / 77 * 100, abs=0.05)
+    assert panel_state(hass, metered_integration.runtime_data)["plan"]["progress"]["behind_plan"] is True
+
+    # It catches up.
+    hass.states.async_set(METER, "1011.0", {"unit_of_measurement": "kWh"})
+    await hass.async_block_till_done()
+    assert hass.states.get(BEHIND_PLAN).state == "off"
+    assert _value(hass, ESTIMATED_SOC) == pytest.approx(20 + 11 * 0.9 / 77 * 100, abs=0.05)
+
+    await _press(hass, "new_guest")
+    assert hass.states.get(BEHIND_PLAN).state == "unknown"

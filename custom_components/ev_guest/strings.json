@@ -64,11 +64,13 @@
         "title": "EV Guest options",
         "data": {
           "currency": "Currency",
-          "energy_entity": "Charger energy meter"
+          "energy_entity": "Charger energy meter",
+          "vehicle_entity": "Car connected sensor"
         },
         "data_description": {
           "currency": "Currency of the electricity prices, used for the charge cost.",
-          "energy_entity": "Optional. A kWh meter for the charger (total energy). EV Guest then measures the energy and cost actually used while a plan runs."
+          "energy_entity": "Optional. A kWh meter for the charger (total energy). EV Guest then measures the energy and cost actually used while a plan runs.",
+          "vehicle_entity": "Optional. The charger's \"car connected\" sensor. When the car has been unplugged for 2 minutes, the guest session ends and the charger is released."
         },
         "description": "Preferences for EV Guest. Changes apply right away."
       }
@@ -78,6 +80,9 @@
     "binary_sensor": {
       "charge_now": {
         "name": "Charge now"
+      },
+      "behind_plan": {
+        "name": "Behind plan"
       }
     },
     "button": {
@@ -135,6 +140,62 @@
       },
       "car_battery_capacity": {
         "name": "Car battery capacity"
+      },
+      "estimated_soc": {
+        "name": "Estimated SoC",
+        "state_attributes": {
+          "source": {
+            "name": "Source",
+            "state": {
+              "plan": "Plan",
+              "meter": "Energy meter"
+            }
+          },
+          "start_soc": {
+            "name": "SoC at start"
+          },
+          "target_soc": {
+            "name": "Target SoC"
+          },
+          "planned_soc": {
+            "name": "Planned SoC"
+          },
+          "planned_energy": {
+            "name": "Planned energy"
+          }
+        }
+      },
+      "charger_control": {
+        "name": "Charger control",
+        "state": {
+          "released": "Released",
+          "charge": "Charge",
+          "pause": "Pause"
+        },
+        "state_attributes": {
+          "session_ends": {
+            "name": "Session ends"
+          },
+          "released_at": {
+            "name": "Released at"
+          },
+          "release_reason": {
+            "name": "Release reason",
+            "state": {
+              "plan_end": "Plan ended",
+              "new_guest": "New guest",
+              "unplugged": "Car unplugged",
+              "cleared": "Plan cleared"
+            }
+          },
+          "car_connected": {
+            "name": "Car connected",
+            "state": {
+              "true": "Yes",
+              "false": "No"
+            }
+          }
+        }
       },
       "status": {
         "name": "Status",

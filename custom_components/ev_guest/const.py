@@ -17,7 +17,7 @@ PLATFORMS: list[Platform] = [
     Platform.TEXT,
     Platform.TIME,
 ]
-USER_AGENT = "EVGuestHomeAssistant/0.9.0 (+https://github.com/Dinnsen/EV-Guest)"
+USER_AGENT = "EVGuestHomeAssistant/0.10.0 (+https://github.com/Dinnsen/EV-Guest)"
 
 MOTORAPI_BASE_URL = "https://v1.motorapi.dk"
 NHTSA_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/{vin}?format=json"
@@ -30,6 +30,7 @@ CONF_MOTORAPI_KEY = "motorapi_api_key"
 CONF_COUNTRY = "country"
 CONF_PLATE_PROVIDER = "plate_provider"
 CONF_ENERGY_ENTITY = "energy_entity"
+CONF_VEHICLE_ENTITY = "vehicle_entity"
 
 # Settings that belong to the connection (changed via reconfigure) as opposed
 # to preferences (changed via options).
@@ -71,8 +72,25 @@ RESULT_ENERGY = "energy"
 RESULT_SAVINGS = "savings"
 RESULT_MEASURED_ENERGY = "measured_energy"
 RESULT_MEASURED_COST = "measured_cost"
+RESULT_ESTIMATED_SOC = "estimated_soc"
+RESULT_CHARGER_CONTROL = "charger_control"
+
+# Charger control (enum): what a charger automation should do. EV Guest only
+# holds the charger during a guest session; outside one it is always
+# "released", so an automation never blocks the owner's own car.
+CONTROL_RELEASED = "released"
+CONTROL_CHARGE = "charge"
+CONTROL_PAUSE = "pause"
+CONTROL_OPTIONS = [CONTROL_RELEASED, CONTROL_CHARGE, CONTROL_PAUSE]
+# Why the last guest session ended.
+RELEASE_PLAN_END = "plan_end"
+RELEASE_NEW_GUEST = "new_guest"
+RELEASE_UNPLUGGED = "unplugged"
+RELEASE_CLEARED = "cleared"
+RELEASE_REASONS = [RELEASE_PLAN_END, RELEASE_NEW_GUEST, RELEASE_UNPLUGGED, RELEASE_CLEARED]
 
 DIAGNOSTIC_CHARGE_NOW = "charge_now"
+DIAGNOSTIC_BEHIND_PLAN = "behind_plan"
 
 # Status sensor (enum): the state of the current plan, or why the last
 # calculation failed. Lookup errors are only raised as action errors.
@@ -117,6 +135,15 @@ ATTR_PLAN_LOCKED = "plan_locked"
 ATTR_ERROR_DETAIL = "error_detail"
 ATTR_CHARGE_NOW_COST = "charge_now_cost"
 ATTR_AVERAGE_PRICE = "average_price"
+ATTR_SOURCE = "source"
+ATTR_START_SOC = "start_soc"
+ATTR_TARGET_SOC = "target_soc"
+ATTR_PLANNED_SOC = "planned_soc"
+ATTR_PLANNED_ENERGY = "planned_energy"
+ATTR_SESSION_ENDS = "session_ends"
+ATTR_RELEASED_AT = "released_at"
+ATTR_RELEASE_REASON = "release_reason"
+ATTR_CAR_CONNECTED = "car_connected"
 
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.{{entry_id}}"
@@ -136,6 +163,15 @@ DATASET_CACHE_TTL = timedelta(hours=24)
 PLANNING_HORIZON = timedelta(hours=48)
 # The energy meter is followed this long after a plan ends, for late readings.
 METER_GRACE = timedelta(minutes=10)
+# While the car charges, the estimated charge level is updated this often.
+PROGRESS_INTERVAL = timedelta(minutes=1)
+# A car must stay unplugged this long before the guest session ends, so a
+# glitch of the "car connected" sensor does not end it.
+UNPLUG_DELAY = timedelta(minutes=1)
+# After the plan, a guest car that is still plugged in is kept paused (so it
+# does not charge on at full price) until it is unplugged, but never longer
+# than this. Only with a car connected sensor.
+POST_PLAN_HOLD = timedelta(hours=24)
 
 SERVICE_GRAB_CAR_DATA = "grab_car_data"
 SERVICE_CALCULATE = "calculate"

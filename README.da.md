@@ -16,7 +16,7 @@
 
 🇬🇧 [Read in English](README.md)
 
-En gæst kommer i elbil og kører igen i morgen tidlig. EV Guest finder de billigste timer at lade den i ud fra dine elpriser – uden at bilen skal ind i Home Assistant. Skriv nummerpladen, hvor fuldt batteriet er, og hvornår bilen skal være klar. Så planlægger EV Guest opladningen, viser hvad den koster og hvad du sparer, og tænder **Lad nu** præcis, når planen siger lad.
+En gæst kommer i elbil og kører igen i morgen tidlig. EV Guest finder de billigste timer at lade den i ud fra dine elpriser – uden at bilen skal ind i Home Assistant. Skriv nummerpladen, hvor fuldt batteriet er, og hvornår bilen skal være klar. Så planlægger EV Guest opladningen, viser hvad den koster og hvad du sparer, og starter og pauser din lader præcis, når planen siger det – og giver den tilbage, når gæsten er kørt.
 
 EV Guest er en beregner: den styrer aldrig selv en lader. En automation på to linjer eller [EV Smart Charging](https://github.com/jonasbkarlsson/ev_smart_charging) står for selve opladningen.
 
@@ -68,6 +68,8 @@ Hver afsluttet opladning gemmes, med samlet energi, pris og besparelse. **Afregn
 ### Målt, ikke kun planlagt
 
 Vælg laderens elmåler i integrationens indstillinger, så måler EV Guest den energi og pris, der faktisk bruges, mens planen kører. Afregning og historik bruger så de målte tal.
+
+Mens bilen lader, viser **Estimeret SoC**, hvor langt den er nået – ud fra planen, eller ud fra måleren hvis du har en. Med en måler tænder **Bagud ift. plan**, når bilen tager tydeligt mindre end planlagt, så du i tide ved, at den måske ikke når målet. Ingen måler? Alt andet virker på samme måde.
 
 ### Lyst og mørkt, computer og telefon
 
@@ -121,7 +123,7 @@ Tilføj **EV Guest** under **Indstillinger → Enheder og tjenester → Tilføj 
 
 Bagefter:
 
-- **Konfigurer** (indstillinger) ændrer valuta og **laderens elmåler**. Ændringer gælder med det samme.
+- **Konfigurer** (indstillinger) ændrer valuta, **laderens elmåler** og **bil tilsluttet-sensoren** (laderens "bil tilsluttet"-sensor, der afslutter gæstesessionen, når bilen kobles fra). Begge er valgfri. Ændringer gælder med det samme.
 - **Omkonfigurer** ændrer prissensor, land eller MotorAPI-nøgle.
 - Holder MotorAPI-nøglen op med at virke, beder Home Assistant om en ny.
 
@@ -132,7 +134,7 @@ Bagefter:
 1. Skriv gæstens **nummerplade**, og tryk **Slå op**. Tjek bil og batteri.
 2. Træk batteriet til ladeniveauet **nu** og **målet**, og vælg ladeeffekt og **Klar kl.**
 3. Tryk **Beregn plan**. Status viser, hvornår opladningen starter.
-4. Lad en automation eller EV Smart Charging følge **Lad nu** (se [Opladning af bilen](#opladning-af-bilen)).
+4. Lad blueprintet starte og pause din lader efter planen (se [Opladning af bilen](#opladning-af-bilen)).
 5. Når gæsten er kørt, tryk **Ny gæst**. Den afsluttede opladning ligger i **Historik**.
 
 Flere EV Guests (fx to ladere)? Vælg mellem dem øverst i panelet.
@@ -159,7 +161,10 @@ Alt i panelet findes også som entiteter til automationer og dashboards. Entitet
 | Hent bildata | Knap | Slå bilen op ud fra pladen. |
 | Beregn | Knap | Lav en ny plan. |
 | Ny gæst | Knap | Ryd gæst og plan, klar til næste bil. |
+| Ladestyring | Sensor (enum) | *Frigivet*, *Lad* eller *Pause*: hvad laderen skal gøre (se [Opladning af bilen](#opladning-af-bilen)). Attributter: `session_ends`, `released_at`, `release_reason`, `car_connected`. |
 | Lad nu | Binær sensor | Tændt præcis mens planen siger lad. |
+| Bagud ift. plan | Binær sensor (problem) | Kun med elmåler: tændt når laderen har leveret tydeligt mindre end planlagt (under 80 % og mindst 1 kWh for lidt, efter 20 minutters opladning). |
+| Estimeret SoC | Sensor (%) | Gæstebilens estimerede ladeniveau: ud fra planen, eller ud fra elmåleren hvis der er valgt en. Attributter: `source` (`plan`/`meter`), `start_soc`, `target_soc`, `planned_soc`, `planned_energy`. |
 | Status | Sensor (enum) | *Klar*, *Planlagt*, *Lader*, *Færdig*, eller hvorfor seneste beregning fejlede. |
 | Ladestart / Ladeslut | Sensor (tidsstempel) | Start på første og slut på sidste ladeperiode. |
 | Ladetid | Sensor (varighed) | Samlet ladetid. |
@@ -184,20 +189,45 @@ Alle tager et valgfrit `config_entry_id`, som kan udelades, når du har én EV G
 
 ## Opladning af bilen
 
-### Med en automation
+EV Guest planlægger; din lader står for opladningen. **Ladestyring** (`sensor.ev_guest_charger_control`) fortæller laderen, hvad den skal gøre:
 
-```yaml
-automation:
-  - alias: Gæsteopladning følger EV Guest
-    triggers:
-      - trigger: state
-        entity_id: binary_sensor.ev_guest_charge_now
-    actions:
-      - action: >-
-          switch.turn_{{ 'on' if trigger.to_state.state == 'on' else 'off' }}
-        target:
-          entity_id: switch.min_lader
-```
+| Tilstand | Betydning |
+| --- | --- |
+| `released` (Frigivet) | Ingen gæst. Lad laderen være – den er din. |
+| `charge` (Lad) | Gæst, i en ladeperiode: lad laderen lade. |
+| `pause` (Pause) | Gæst, uden for en ladeperiode: sæt laderen på pause. |
+
+En **gæstesession** starter, når du laver en plan, og slutter altid af sig selv, så EV Guest aldrig holder på laderen, fordi den tror, der stadig er en gæst:
+
+- når planen slutter,
+- når du trykker **Ny gæst**, eller en ny beregning fejler,
+- når bilen har været koblet fra i et minut (med en **bil tilsluttet-sensor**, se [Opsætning](#opsætning)).
+
+Med en bil tilsluttet-sensor holdes en gæstebil, der stadig sidder i efter planen, på pause, til den kobles fra – højst 24 timer – så den ikke lader videre til fuld pris. Uden sensoren frigives laderen, når planen slutter.
+
+### Med blueprintet (anbefalet)
+
+[![Åbn din Home Assistant og vis dialogen til import af blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FDinnsen%2FEV-Guest%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fev_guest%2Fcharger_follows_ev_guest.yaml)
+
+Blueprintet *EV Guest – charger follows the plan* virker med enhver lader: du vælger, hvad der starter og sætter opladningen på pause.
+
+| Lader | Start opladning | Pause opladning |
+| --- | --- | --- |
+| Zaptec ([HACS](https://github.com/custom-components/zaptec)) | Tænd kontakten *Charging* | Sluk kontakten *Charging* |
+| Monta ([hass-monta](https://github.com/nickknissen/hass-monta)) | `monta.start_charging` med dit ladepunkt | `monta.stop_charging` med dit ladepunkt |
+| Wallbox, Easee og andre med en kontakt | Tænd kontakten | Sluk kontakten |
+| OCPP ([HACS](https://github.com/lbbrhzn/ocpp)) | Sæt *Maximum current* til din normale strøm | Sæt *Maximum current* til 0 A |
+| Tesla Wall Connector | – | – (kan ikke styres fra Home Assistant) |
+
+Blueprintet:
+
+- lader og pauser med planen, og pauser igen, når en bil sættes i uden for en ladeperiode (de fleste ladere starter selv),
+- giver laderen tilbage (kører *Start opladning*), når gæstesessionen slutter – kun efter at have holdt på den, aldrig af sig selv,
+- indhenter efter en genstart af Home Assistant: følger en igangværende session, eller giver laderen tilbage, hvis sessionen sluttede, mens Home Assistant var nede.
+
+### Med din egen automation
+
+Følg `sensor.ev_guest_charger_control`: start opladning ved `charge`, pause ved `pause`, og giv kun laderen tilbage, når den skifter fra `charge` eller `pause` til `released`. `binary_sensor.ev_guest_charge_now` viser stadig de planlagte perioder, men styr ikke en lader på den alene: den er også slukket, når der ikke er nogen gæst.
 
 ### Med EV Smart Charging
 
@@ -214,6 +244,7 @@ Ladehastighed og frist er indstillinger i EV Smart Charging. Kopiér dem med en 
 - **Energi og tid.** Energi i batteriet = kapacitet × (mål − nu). Fra nettet divideres med ladeeffektiviteten (standard 90 %), og ladetiden er energien fra nettet divideret med ladeeffekten.
 - **Den billigste plan.** EV Guest prøver alle perioder, der kan nå at blive færdige før fristen – også én, der starter i den prisperiode, der kører nu, og én, der slutter præcis ved et prisskift – og beholder den billigste. Med *billigste perioder* bruges de billigste prisperioder, og en rest lægges op ad en af dem, så opladningen ikke deles mere op end nødvendigt.
 - **Besparelsen** sammenligner planen med at lade den samme energi fra nu af.
+- **Estimeret ladeniveau.** EV Guest ser aldrig bilen. Uden måler er estimatet planens startniveau plus den ladetid, der er gået × ladeeffekt × effektivitet, aldrig over målet. Med måler er det startniveauet plus den målte energi × effektivitet. Det opdateres hvert minut, mens bilen lader.
 - **Planer der opfører sig.** En plan følger nye priser (fx når morgendagens priser kommer), indtil den starter. Når den er startet, låses den: EV Guest ser aldrig bilens aktuelle ladeniveau, og en plan der flyttede sig under opladningen, ville lade to gange. Tryk **Beregn plan** for at planlægge igen.
 - **Ingen polling.** EV Guest opdaterer, når du ændrer noget, når prissensoren ændrer sig, og præcis når en ladeperiode starter eller slutter. Opslaget kontakter kun MotorAPI, NHTSA og Open EV Data, når du trykker **Slå op**; listen fra Open EV Data hentes højst én gang i døgnet.
 - **Historik.** En plan gemmes i historikken ti minutter efter den slutter (så sene målinger kommer med), eller med det samme når du trykker **Ny gæst** eller planlægger en ny bil. Planer, du erstatter før de er færdige, gemmes ikke.
@@ -235,7 +266,9 @@ Brug en sensor med de priser, du faktisk betaler (med nettarif og afgifter), for
 - Opslag på nummerplade virker kun i Danmark. Uden det sætter du batterikapaciteten selv.
 - Batteriet fra Open EV Data er et bedste gæt; tjek det, især for sjældne varianter.
 - Opladningen regnes med fuld effekt hele tiden; rigtige biler lader langsommere tæt på fuldt. Et mål på 80–90 % holder planen tæt på virkeligheden.
-- EV Guest ser ikke bilens aktuelle ladeniveau.
+- Kobles gæstens bil fra, og en anden bil sættes i inden for et minut, tror EV Guest, det er den samme bil. Tryk **Ny gæst** for at frigive laderen.
+- EV Guest ser ikke bilens aktuelle ladeniveau. *Estimeret SoC* er et estimat ud fra planen eller måleren.
+- Nogle ladere opdaterer kun deres elmåler en gang imellem. *Bagud ift. plan* kan så være tændt et stykke tid indtil næste aflæsning.
 - Home Assistants egen Nord Pool-integration har ingen pris-attributter; brug Nord Pool fra HACS eller Energi Data Service.
 - Elmåleren måler alt på måleren, mens planen kører – også en anden bil på samme lader.
 
@@ -266,7 +299,7 @@ EV Guest er ikke tilknyttet, godkendt eller vedligeholdt af Home Assistant, Moto
 
 ## Support
 
-Fundet en fejl eller har en idé? [Opret et issue](https://github.com/Dinnsen/EV-Guest/issues). Sparer EV Guest dig penge, er du velkommen til at [give en kop kaffe](https://buymeacoffee.com/dinnsen) ☕
+Fundet en fejl eller har en idé? [Opret et issue](https://github.com/Dinnsen/EV-Guest/issues/new/choose). Vil du have EV Guest i dit land eller på dit sprog? Der er skabeloner til det også, og [CONTRIBUTING.md](CONTRIBUTING.md) viser, hvordan du selv tilføjer dem. Sparer EV Guest dig penge, er du velkommen til at [give en kop kaffe](https://buymeacoffee.com/dinnsen) ☕
 
 ## Licens
 

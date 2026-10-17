@@ -64,11 +64,13 @@
         "title": "EV Guest-indstillinger",
         "data": {
           "currency": "Valuta",
-          "energy_entity": "Laderens elmåler"
+          "energy_entity": "Laderens elmåler",
+          "vehicle_entity": "Bil tilsluttet-sensor"
         },
         "data_description": {
           "currency": "Valutaen for elpriserne, bruges til ladeomkostningen.",
-          "energy_entity": "Valgfri. En kWh-måler for laderen (samlet energi). EV Guest måler så den energi og pris, der faktisk bruges, mens en plan kører."
+          "energy_entity": "Valgfri. En kWh-måler for laderen (samlet energi). EV Guest måler så den energi og pris, der faktisk bruges, mens en plan kører.",
+          "vehicle_entity": "Valgfri. Laderens \"bil tilsluttet\"-sensor. Når bilen har været koblet fra i 2 minutter, slutter gæstesessionen, og laderen frigives."
         },
         "description": "Indstillinger for EV Guest. Ændringer gælder med det samme."
       }
@@ -78,6 +80,9 @@
     "binary_sensor": {
       "charge_now": {
         "name": "Lad nu"
+      },
+      "behind_plan": {
+        "name": "Bagud ift. plan"
       }
     },
     "button": {
@@ -135,6 +140,62 @@
       },
       "car_battery_capacity": {
         "name": "Bilens batterikapacitet"
+      },
+      "estimated_soc": {
+        "name": "Estimeret SoC",
+        "state_attributes": {
+          "source": {
+            "name": "Kilde",
+            "state": {
+              "plan": "Plan",
+              "meter": "Energimåler"
+            }
+          },
+          "start_soc": {
+            "name": "SoC ved start"
+          },
+          "target_soc": {
+            "name": "Mål-SoC"
+          },
+          "planned_soc": {
+            "name": "Planlagt SoC"
+          },
+          "planned_energy": {
+            "name": "Planlagt energi"
+          }
+        }
+      },
+      "charger_control": {
+        "name": "Ladestyring",
+        "state": {
+          "released": "Frigivet",
+          "charge": "Lad",
+          "pause": "Pause"
+        },
+        "state_attributes": {
+          "session_ends": {
+            "name": "Session slutter"
+          },
+          "released_at": {
+            "name": "Frigivet"
+          },
+          "release_reason": {
+            "name": "Årsag",
+            "state": {
+              "plan_end": "Planen sluttede",
+              "new_guest": "Ny gæst",
+              "unplugged": "Bil koblet fra",
+              "cleared": "Plan ryddet"
+            }
+          },
+          "car_connected": {
+            "name": "Bil tilsluttet",
+            "state": {
+              "true": "Ja",
+              "false": "Nej"
+            }
+          }
+        }
       },
       "status": {
         "name": "Status",

@@ -1,0 +1,50 @@
+name: Translation
+description: Add EV Guest in your language, or fix a translation.
+title: "[Translation] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        EV Guest is in English and Danish today. A translation covers the entity names and settings
+        (`translations/<language>.json`) and the panel. [CONTRIBUTING.md](https://github.com/Dinnsen/EV-Guest/blob/main/CONTRIBUTING.md#add-a-language)
+        shows where the texts are.
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: Swedish
+    validations:
+      required: true
+  - type: input
+    id: code
+    attributes:
+      label: Language code
+      description: The code Home Assistant uses for the language.
+      placeholder: sv
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is it?
+      options:
+        - A new language
+        - A fix to an existing translation
+    validations:
+      required: true
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who translates?
+      options:
+        - I make a pull request myself
+        - I paste the translations in this issue
+        - I can review a translation someone else makes
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Wording to change, words you are unsure of, or anything else.

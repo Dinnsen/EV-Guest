@@ -20,6 +20,7 @@ from .const import (
     CONF_MOTORAPI_KEY,
     CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
+    CONF_VEHICLE_ENTITY,
     CONNECTION_KEYS,
     COUNTRIES,
     CURRENCIES,
@@ -38,6 +39,7 @@ COUNTRY_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(options=COUNTRIES, mode=selector.SelectSelectorMode.DROPDOWN)
 )
 ENERGY_ENTITY_SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="energy"))
+VEHICLE_ENTITY_SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor"))
 API_KEY_SELECTOR = selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))
 
 
@@ -201,6 +203,10 @@ class EVGuestOptionsFlow(OptionsFlowWithReload):
                     CONF_ENERGY_ENTITY,
                     description={"suggested_value": self.config_entry.options.get(CONF_ENERGY_ENTITY)},
                 ): ENERGY_ENTITY_SELECTOR,
+                vol.Optional(
+                    CONF_VEHICLE_ENTITY,
+                    description={"suggested_value": self.config_entry.options.get(CONF_VEHICLE_ENTITY)},
+                ): VEHICLE_ENTITY_SELECTOR,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

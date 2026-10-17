@@ -52,11 +52,14 @@ const TEXT = {
     charging_until: "Lader – færdig kl. {time}",
     paused_until: "Pause – lader igen kl. {time}",
     completed_at: "Færdig kl. {time}",
+    unplugged_at: "Bilen blev koblet fra kl. {time} – laderen er frigivet",
     status_ready: "Klar til en plan",
     status_planned: "Planlagt",
     status_charging: "Lader",
     status_completed: "Afsluttet",
     est_level: "ca. {pct} nu",
+    est_level_measured: "ca. {pct} nu, målt",
+    behind_plan: "Bilen lader langsommere end planlagt – den når måske ikke målet.",
     prices_title: "Elpris de næste døgn",
     today: "I dag",
     tomorrow: "I morgen",
@@ -175,11 +178,14 @@ const TEXT = {
     charging_until: "Charging – done at {time}",
     paused_until: "Paused – charging again at {time}",
     completed_at: "Done at {time}",
+    unplugged_at: "The car was unplugged at {time} – the charger is released",
     status_ready: "Ready for a plan",
     status_planned: "Planned",
     status_charging: "Charging",
     status_completed: "Completed",
     est_level: "about {pct} now",
+    est_level_measured: "about {pct} now, measured",
+    behind_plan: "The car charges slower than planned – it may not reach the target.",
     prices_title: "Electricity price, the next days",
     today: "Today",
     tomorrow: "Tomorrow",
@@ -1093,9 +1099,16 @@ class EvGuestPanel extends HTMLElement {
       if (started && next) text = this._t("paused_until", { time: this._time(new Date(next.start).toISOString()) });
       else if (next) text = this._t("starts_in", { time: this._duration((next.start - now) / 60000) });
     } else if (s.status === "completed") {
-      text = this._t("completed_at", { time: this._time(s.plan.segments.at(-1).end) });
+      text =
+        s.release && s.release.reason === "unplugged"
+          ? this._t("unplugged_at", { time: this._time(s.release.at) })
+          : this._t("completed_at", { time: this._time(s.plan.segments.at(-1).end) });
     } else {
       text = this._t("status_ready");
+    }
+    if (!s.error && s.plan.progress && s.plan.progress.behind_plan) {
+      text = `${text} ${this._t("behind_plan")}`.trim();
+      kind = "behind";
     }
     box.className = `status-line ${kind}`;
     box.innerHTML = `<i></i><span>${esc(text)}</span>`;
@@ -1140,6 +1153,14 @@ class EvGuestPanel extends HTMLElement {
     flow.classList.toggle("on", Boolean(s.charge_now));
     const est = root.querySelector(".battery-legend .gain");
     if (!s.charge_now || !info || !s.plan.speed) return;
+    // With an energy meter the estimate follows the energy actually delivered.
+    const progress = s.plan.progress;
+    if (progress && progress.source === "meter") {
+      const pct = clamp(Number(progress.soc), 0, 100);
+      root.querySelector(".fill-now").style.width = `${pct}%`;
+      if (est) est.textContent = this._t("est_level_measured", { pct: `${Math.round(pct)} %` });
+      return;
+    }
     const now = Date.now();
     let hours = 0;
     for (const seg of s.plan.segments) {
@@ -1670,6 +1691,8 @@ a { color: var(--evg-accent); }
 .status-line.completed i { background: var(--evg-good); }
 .status-line.error { border-color: color-mix(in srgb, var(--evg-bad) 45%, transparent); }
 .status-line.error i { background: var(--evg-bad); }
+.status-line.behind { border-color: color-mix(in srgb, var(--evg-bad) 45%, transparent); }
+.status-line.behind i { background: var(--evg-bad); }
 .status-line span { line-height: 1.35; }
 @keyframes ping { to { box-shadow: 0 0 0 10px transparent; } }
 
