@@ -139,7 +139,7 @@ Bagefter:
 
 Flere EV Guests (fx to ladere)? Vælg mellem dem øverst i panelet.
 
-Hvad betyder bjælkerne og buerne på uret? Tryk **?** øverst til højre: den forklarer hver del af ladeuret, og hvad hver del af panelet gør.
+Hvad betyder bjælkerne og buerne på uret? Tryk **?** øverst til højre for en rundtur: hver del af ladeuret lyser op og bliver levende, mens resten bliver grå, og bagefter går rundturen gennem resten af panelet.
 
 <img src="docs/images/da/settings.png" alt="Indstillinger for afregning, ladeeffektivitet og datakilder" width="100%">
 

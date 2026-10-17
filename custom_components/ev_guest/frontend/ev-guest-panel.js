@@ -4,9 +4,14 @@ const TEXT = {
   da: {
     tab_charge: "Opladning",
     help: "Hjælp",
-    help_title: "Sådan virker EV Guest",
-    help_intro: "EV Guest finder de billigste timer at lade en gæstebil i – uden at bilen skal ind i Home Assistant.",
-    help_clock: "Ladeuret",
+    tour_next: "Næste",
+    tour_back: "Tilbage",
+    tour_done: "Færdig",
+    tour_close: "Afslut rundturen",
+    tour_step: "{n} af {total}",
+    tour_cheapest: "Billigst",
+    tour_dearest: "Dyrest",
+    tour_example: "Der er ingen plan endnu, så uret viser et eksempel.",
     help_clock_intro: "Uret viser det næste døgn på en 24-timers urskive med kl. 00 øverst.",
     help_face: "Urskiven",
     help_face_text: "En streg for hver time. De lange streger er kl. 00, 06, 12 og 18.",
@@ -24,7 +29,6 @@ const TEXT = {
     help_deadline_text: "Klar kl. – hvornår bilen skal være ladet.",
     help_center: "Midten",
     help_center_text: "Hvad planen koster, hvornår den lader, og hvad du sparer i forhold til at lade med det samme. Uden en plan: prisen nu, og hvornår det er billigst.",
-    help_features: "Funktionerne",
     help_f_guest: "Gæstebil",
     help_f_guest_text: "Skriv nummerpladen og tryk Slå op. EV Guest finder bilen og dens batteri. Ringen viser, hvor sikkert batteriet passer – tjek det, eller sæt batteriet selv.",
     help_f_battery: "Batteri",
@@ -35,16 +39,16 @@ const TEXT = {
     help_f_plan_text: "Laver planen. Den følger nye priser, indtil den starter – så låses den, så bilen aldrig lades to gange.",
     help_f_status: "Statuslinjen",
     help_f_status_text: "Hvad der sker nu: starter om lidt, lader, holder pause eller er færdig. Den bliver rød, hvis noget er galt, eller bilen lader langsommere end planlagt.",
-    help_f_facts: "Fakta og prisgraf",
-    help_f_facts_text: "Start, slut, tid, energi, pris, besparelse og hastighed – og priserne for i dag og i morgen med ladeperioderne.",
+    help_f_facts: "Fakta",
+    help_f_facts_text: "Start, slut, tid, energi, pris, besparelse og hastighed for planen – og med en elmåler det, der faktisk blev brugt.",
+    help_f_prices: "Prisgrafen",
+    help_f_prices_text: "Priserne for i dag og i morgen med ladeperioderne. Træk en finger eller musen hen over for at se prisen.",
     help_f_charger: "Laderen",
     help_f_charger_text: "Med blueprintet starter og pauser laderen efter planen. Den gives altid tilbage, når planen slutter, når bilen kobles fra, eller når du trykker Ny gæst.",
     help_f_new: "Ny gæst",
     help_f_new_text: "Rydder gæst og plan, klar til næste bil. En afsluttet opladning gemmes i Historik.",
-    help_f_history: "Historik og Afregn",
-    help_f_history_text: "Alle afsluttede opladninger med energi og pris. Afregn laver en tekst til gæsten med dine betalingsoplysninger.",
-    help_f_more: "Indstillinger",
-    help_f_more_text: "Pris pr. kWh og betalingsoplysninger til afregning, ladeeffektivitet og datakilder.",
+    help_f_tabs: "Historik og Indstillinger",
+    help_f_tabs_text: "Historik har alle afsluttede opladninger med energi og pris – Afregn laver en tekst til gæsten med dine betalingsoplysninger. Indstillinger har pris pr. kWh, betalingsoplysninger, ladeeffektivitet og datakilder.",
     tab_history: "Historik",
     tab_settings: "Indstillinger",
     loading: "Henter EV Guest …",
@@ -171,9 +175,14 @@ const TEXT = {
   },
   en: {
     help: "Help",
-    help_title: "How EV Guest works",
-    help_intro: "EV Guest finds the cheapest hours to charge a guest car – without adding the car to Home Assistant.",
-    help_clock: "The price clock",
+    tour_next: "Next",
+    tour_back: "Back",
+    tour_done: "Done",
+    tour_close: "End the tour",
+    tour_step: "{n} of {total}",
+    tour_cheapest: "Cheapest",
+    tour_dearest: "Dearest",
+    tour_example: "There is no plan yet, so the clock shows an example.",
     help_clock_intro: "The clock shows the next 24 hours on a 24-hour dial with midnight at the top.",
     help_face: "The dial",
     help_face_text: "One tick for every hour. The long ticks are 00, 06, 12 and 18.",
@@ -191,7 +200,6 @@ const TEXT = {
     help_deadline_text: "Ready by – when the car must be charged.",
     help_center: "The centre",
     help_center_text: "What the plan costs, when it charges, and what you save compared with charging right away. Without a plan: the price now, and when it is cheapest.",
-    help_features: "The features",
     help_f_guest: "Guest car",
     help_f_guest_text: "Enter the license plate and tap Look up. EV Guest finds the car and its battery. The ring shows how sure the battery match is – check it, or set the battery yourself.",
     help_f_battery: "Battery",
@@ -202,16 +210,16 @@ const TEXT = {
     help_f_plan_text: "Makes the plan. It follows new prices until it starts – then it is locked, so the car is never charged twice.",
     help_f_status: "The status line",
     help_f_status_text: "What happens now: starting soon, charging, paused or done. It turns red when something is wrong or the car charges slower than planned.",
-    help_f_facts: "Facts and price graph",
-    help_f_facts_text: "Start, end, time, energy, cost, savings and speed – and today's and tomorrow's prices with the charging periods.",
+    help_f_facts: "Facts",
+    help_f_facts_text: "Start, end, time, energy, cost, savings and speed of the plan – and with an energy meter, what was actually used.",
+    help_f_prices: "The price graph",
+    help_f_prices_text: "Today's and tomorrow's prices with the charging periods. Drag a finger or the mouse across to see the price.",
     help_f_charger: "The charger",
     help_f_charger_text: "With the blueprint your charger starts and pauses with the plan. It is always handed back when the plan ends, when the car is unplugged, or when you tap New guest.",
     help_f_new: "New guest",
     help_f_new_text: "Clears the guest and the plan, ready for the next car. A finished charge is kept in History.",
-    help_f_history: "History and Bill",
-    help_f_history_text: "Every finished charge with energy and cost. Bill makes a text for the guest with your payment details.",
-    help_f_more: "Settings",
-    help_f_more_text: "Price per kWh and payment details for bills, charging efficiency and data sources.",
+    help_f_tabs: "History and Settings",
+    help_f_tabs_text: "History has every finished charge with energy and cost – Bill makes a text for the guest with your payment details. Settings has the price per kWh, payment details, charging efficiency and data sources.",
     tab_charge: "Charging",
     tab_history: "History",
     tab_settings: "Settings",
@@ -340,6 +348,28 @@ const TEXT = {
 };
 
 const CHARGER_PRESETS = [3.7, 7.4, 11, 22];
+
+/* The guided tour: a part of the clock (part) or of the panel (target), with its text. */
+const TOUR = [
+  { key: "face", part: "face", title: "help_face", intro: "help_clock_intro", text: "help_face_text" },
+  { key: "bars", part: "bars", title: "help_bars", text: "help_bars_text" },
+  { key: "window", part: "window", title: "help_window", text: "help_window_text" },
+  { key: "preview", part: "window", title: "help_preview", text: "help_preview_text" },
+  { key: "flow", part: "window", title: "help_flow", text: "help_flow_text" },
+  { key: "needle", part: "needle", title: "help_needle", text: "help_needle_text" },
+  { key: "deadline", part: "deadline", title: "help_deadline", text: "help_deadline_text" },
+  { key: "center", target: ".dial-center", title: "help_center", text: "help_center_text" },
+  { key: "guest", target: ".guest", title: "help_f_guest", text: "help_f_guest_text" },
+  { key: "battery", target: ".battery", title: "help_f_battery", text: "help_f_battery_text" },
+  { key: "settings", target: ".charging .fields", title: "help_f_settings", text: "help_f_settings_text" },
+  { key: "plan", target: ".actions .calc", title: "help_f_plan", text: "help_f_plan_text" },
+  { key: "status", target: ".status-line", title: "help_f_status", text: "help_f_status_text" },
+  { key: "facts", target: ".facts", title: "help_f_facts", text: "help_f_facts_text" },
+  { key: "prices", target: ".prices", title: "help_f_prices", text: "help_f_prices_text" },
+  { key: "charger", target: ".charging .actions", title: "help_f_charger", text: "help_f_charger_text" },
+  { key: "new", target: ".actions .new-guest", title: "help_f_new", text: "help_f_new_text" },
+  { key: "tabs", target: ".tabs", title: "help_f_tabs", text: "help_f_tabs_text" },
+];
 const DEADLINE_PRESETS = ["06:00", "07:00", "08:00"];
 const ENTRY_KEY = "ev-guest-entry";
 const PREVIEW_DELAY = 140;
@@ -746,7 +776,7 @@ class EvGuestPanel extends HTMLElement {
         <div class="toast" role="status" aria-live="polite"></div>
         <div class="sheet-root"></div>
       </div>`;
-    this.shadowRoot.querySelector(".help-btn").addEventListener("click", () => this._openHelp());
+    this.shadowRoot.querySelector(".help-btn").addEventListener("click", () => (this._tour ? this._endTour() : this._startTour()));
     if (customElements.get("ha-menu-button")) {
       this._menu = document.createElement("ha-menu-button");
       this._menu.hass = this._hass;
@@ -764,6 +794,7 @@ class EvGuestPanel extends HTMLElement {
     if (this._tab === "history") content.innerHTML = this._historyHtml();
     else if (this._tab === "settings") content.innerHTML = this._settingsHtml();
     else content.innerHTML = this._chargeHtml();
+    if (this._tour && this._tab !== "charge") this._endTour();
     this._bind();
     if (this._tab === "charge") {
       this._renderGuest();
@@ -883,6 +914,7 @@ class EvGuestPanel extends HTMLElement {
           <span class="now-label"></span><span class="gain"></span><span class="target-label"></span>
         </div>
 
+        <div class="fields">
         <div class="field">
           <span>${this._t("charger")}</span>
           <div class="chips power">
@@ -907,6 +939,7 @@ class EvGuestPanel extends HTMLElement {
             <button role="radio" data-mode="continuous">${this._t("continuous")}</button>
             <button role="radio" data-mode="split">${this._t("split")}</button>
           </div>
+        </div>
         </div>
 
         <div class="actions">
@@ -1034,6 +1067,7 @@ class EvGuestPanel extends HTMLElement {
     this._renderFacts();
     this._renderTimeline();
     this._renderBatteryLive();
+    this._applyTour();
     this._animatePlan = false;
   }
 
@@ -1057,25 +1091,30 @@ class EvGuestPanel extends HTMLElement {
     const max = Math.max(...values);
     const cx = 200;
     const cy = 200;
+    const tour = this._tour ? TOUR[this._tour.step].key : null;
     let html = `<defs>
       <linearGradient id="win" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#00B894"/><stop offset="1" stop-color="#A3E635"/></linearGradient>
-      <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5"/></filter></defs>`;
+      <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5"/></filter>
+      <filter id="tour-gray"><feColorMatrix type="saturate" values="0"/></filter></defs>`;
 
     // Hour ticks and labels of a 24-hour clock.
-    html += `<circle cx="${cx}" cy="${cy}" r="118" class="face"/>`;
+    html += `<g data-part="face"><circle cx="${cx}" cy="${cy}" r="118" class="face"/>`;
     for (let h = 0; h < 24; h++) {
       const [x1, y1] = polar(cx, cy, 196, h);
       const [x2, y2] = polar(cx, cy, h % 6 === 0 ? 188 : 192, h);
-      html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="tick ${h % 6 === 0 ? "major" : ""}"/>`;
+      html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="tick ${h % 6 === 0 ? "major" : ""}" style="--k:${h}"/>`;
     }
     for (const h of [0, 6, 12, 18]) {
       const [x, y] = polar(cx, cy, 106, h);
-      html += `<text x="${x}" y="${y}" class="hour" dominant-baseline="central" text-anchor="middle">${String(h).padStart(2, "0")}</text>`;
+      html += `<text x="${x}" y="${y}" class="hour" dominant-baseline="central" text-anchor="middle" style="--k:${h}">${String(h).padStart(2, "0")}</text>`;
     }
+    html += `</g>`;
 
     // Prices as bars around the clock, from now and one day ahead.
     const inner = 142;
     const outer = 184;
+    html += `<g data-part="bars">`;
+    const barEnds = [];
     prices.forEach((p, i) => {
       const from = Math.max(new Date(p.start).getTime(), now.getTime());
       const to = Math.min(new Date(p.end).getTime(), end);
@@ -1083,6 +1122,7 @@ class EvGuestPanel extends HTMLElement {
       const toH = nowH + (to - now.getTime()) / 3600000;
       const t = max > min ? (p.price - min) / (max - min) : 0.5;
       const r = inner + 8 + t * (outer - inner - 8);
+      barEnds.push({ midH: (fromH + toH) / 2, r, price: p.price });
       const gap = Math.min(0.04, (toH - fromH) * 0.12);
       const a1 = polar(cx, cy, inner, fromH + gap);
       const a2 = polar(cx, cy, r, fromH + gap);
@@ -1091,23 +1131,46 @@ class EvGuestPanel extends HTMLElement {
       const large = toH - fromH > 12 ? 1 : 0;
       html += `<path class="bar" style="fill:${priceColor(t)};--d:${(i * 8).toFixed(0)}ms" d="M${a1} L${a2} A${r} ${r} 0 ${large} 1 ${b1} L${b2} A${inner} ${inner} 0 ${large} 0 ${a1}Z"><title>${this._time(p.start)}: ${this._money(p.price)}</title></path>`;
     });
+    if (tour === "bars" && barEnds.length > 1) {
+      // Point out the cheapest and the dearest period.
+      const cheapest = barEnds.reduce((a, b) => (b.price < a.price ? b : a));
+      const dearest = barEnds.reduce((a, b) => (b.price > a.price ? b : a));
+      [
+        [cheapest, this._t("tour_cheapest"), "cheap"],
+        [dearest, this._t("tour_dearest"), "dear"],
+      ].forEach(([bar, label, kind], i) => {
+        const [px, y] = polar(cx, cy, bar.r + 26, bar.midH);
+        const x = clamp(px, 34, 366);
+        html += `<g class="tour-label ${kind}" style="--i:${i}"><rect x="${x - 34}" y="${y - 12}" width="68" height="24" rx="12"/><text x="${x}" y="${y}" dominant-baseline="central" text-anchor="middle">${esc(label)}</text></g>`;
+      });
+    }
+    html += `</g>`;
 
-    // The charging window as the lit arc of the logo.
-    const plan = this._shownPlan();
+    // The charging window as the lit arc of the logo. During the tour an
+    // example window stands in when there is no plan.
+    let plan = this._shownPlan();
+    if (!plan && this._tour) plan = this._examplePlan(prices);
+    html += `<g data-part="window">`;
     if (plan) {
+      let tourSeg = null;
       plan.segments.forEach((seg, index) => {
         const startMs = new Date(seg.start).getTime();
         const endMs = Math.min(new Date(seg.end).getTime(), startMs + 23.9 * 3600000);
         const past = endMs <= now.getTime();
         const fromH = new Date(startMs).getHours() + new Date(startMs).getMinutes() / 60;
         const d = arcPath(cx, cy, 128, fromH, fromH + (endMs - startMs) / 3600000);
-        const sweep = this._animatePlan && !reducedMotion() ? " sweep" : "";
+        if (!past && !tourSeg) tourSeg = d;
+        const sweep = (this._animatePlan || (tour === "window" && this._tourAnimate)) && !reducedMotion() ? " sweep" : "";
         const cls = plan.preview ? "window preview" : `window${past ? " past" : ""}${sweep}`;
         if (!past) html += `<path d="${d}" class="window-glow ${plan.preview ? "preview" : ""}" filter="url(#glow)"/>`;
         html += `<path d="${d}" class="${cls}" pathLength="1" style="--i:${index}"/>`;
         if (s.charge_now && !plan.preview && startMs <= now.getTime() && now.getTime() < endMs) html += `<path d="${d}" class="window-flow"/>`;
       });
+      tourSeg = tourSeg || arcPath(cx, cy, 128, nowH + 2, nowH + 5);
+      if (tour === "preview") html += `<path d="${tourSeg}" class="tour-preview" pathLength="1"/>`;
+      if (tour === "flow") html += `<path d="${tourSeg}" class="window-flow tour-flow"/>`;
     }
+    html += `</g>`;
 
     // Deadline flag.
     const inputs = this._inputs;
@@ -1117,19 +1180,40 @@ class EvGuestPanel extends HTMLElement {
       const [x1, y1] = polar(cx, cy, 116, h);
       const [x2, y2] = polar(cx, cy, 198, h);
       const [fx, fy] = polar(cx, cy, 206, h);
-      html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="deadline-line"/><circle cx="${fx}" cy="${fy}" r="5" class="deadline-dot"><title>${this._t("deadline")} ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}</title></circle>`;
+      html += `<g data-part="deadline"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="deadline-line"/><circle cx="${fx}" cy="${fy}" r="5" class="deadline-dot" style="transform-origin:${fx}px ${fy}px"><title>${this._t("deadline")} ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}</title></circle></g>`;
     }
 
     // Now needle.
     const [nx1, ny1] = polar(cx, cy, 112, nowH);
     const [nx2, ny2] = polar(cx, cy, 196, nowH);
-    html += `<line x1="${nx1}" y1="${ny1}" x2="${nx2}" y2="${ny2}" class="needle"/><circle cx="${nx2}" cy="${ny2}" r="4.5" class="needle-dot"/>`;
+    html += `<g data-part="needle" style="--from:${(-nowH * 15).toFixed(1)}deg"><line x1="${nx1}" y1="${ny1}" x2="${nx2}" y2="${ny2}" class="needle"/><circle cx="${nx2}" cy="${ny2}" r="4.5" class="needle-dot"/></g>`;
 
     svg.innerHTML = html;
     // The bars grow in once per page, not on every update.
     svg.classList.toggle("intro", !svg.dataset.shown);
     svg.dataset.shown = "1";
-    this._renderDialCenter(plan, prices);
+    this._renderDialCenter(plan && !plan.example ? plan : null, prices);
+  }
+
+  /* A three-hour window at the cheapest time, to show what a plan looks like. */
+  _examplePlan(prices) {
+    if (!prices.length) return null;
+    const hours = 3;
+    let best = null;
+    prices.forEach((p) => {
+      const start = new Date(p.start).getTime();
+      const window = prices.filter((q) => new Date(q.start).getTime() >= start && new Date(q.start).getTime() < start + hours * 3600000);
+      const span = new Date(window.at(-1).end).getTime() - start;
+      if (span < hours * 3600000) return;
+      const avg = window.reduce((sum, q) => sum + q.price, 0) / window.length;
+      if (!best || avg < best.avg) best = { avg, start };
+    });
+    if (!best) return null;
+    return {
+      example: true,
+      preview: false,
+      segments: [{ start: new Date(best.start).toISOString(), end: new Date(best.start + hours * 3600000).toISOString() }],
+    };
   }
 
   _renderDialCenter(plan, prices) {
@@ -1473,88 +1557,147 @@ class EvGuestPanel extends HTMLElement {
     render();
   }
 
-  // ------------------------------------------------------------------ help
+  // ------------------------------------------------------------------ tour
 
-  /* Small pictures of the parts of the price clock, drawn like the clock itself. */
-  _helpSwatch(kind) {
-    const c = 24;
-    const arc = (r, from, to) => arcPath(c, c, r, from, to);
-    const gradient = `<defs><linearGradient id="help-win-${kind}" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#00B894"/><stop offset="1" stop-color="#A3E635"/></linearGradient></defs>`;
-    const win = `url(#help-win-${kind})`;
-    let body = "";
-    if (kind === "face") {
-      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/>`;
-      for (let h = 0; h < 24; h++) {
-        const [x1, y1] = polar(c, c, 21, h);
-        const [x2, y2] = polar(c, c, h % 6 === 0 ? 16.5 : 19, h);
-        body += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="hs-tick${h % 6 === 0 ? " major" : ""}"/>`;
-      }
-    } else if (kind === "bars") {
-      // A small ring of price bars: cheap night, expensive evening.
-      const prices = [0.5, 0.35, 0.15, 0, 0.05, 0.2, 0.55, 0.8, 0.6, 0.45, 0.7, 1];
-      prices.forEach((t, i) => {
-        const h = i * 2 + 0.25;
-        const [x1, y1] = polar(c, c, 11, h);
-        const [x2, y2] = polar(c, c, 13 + t * 9, h);
-        body += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${priceColor(t)}" stroke-width="4.2" stroke-linecap="butt"/>`;
-      });
-    } else if (kind === "window") {
-      body = `<path d="${arc(15, 19, 23)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="round" opacity=".35"/>
-        <path d="${arc(15, 1, 7)}" fill="none" stroke="#A3E635" stroke-width="7" stroke-linecap="round" opacity=".35" filter="url(#help-glow)"/>
-        <path d="${arc(15, 1, 7)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="round"/>
-        <defs><filter id="help-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2"/></filter></defs>`;
-    } else if (kind === "preview") {
-      body = `<path d="${arc(15, 22, 32)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="butt" pathLength="1" stroke-dasharray=".1 .07" opacity=".9"/>`;
-    } else if (kind === "flow") {
-      body = `<path d="${arc(15, 22, 32)}" fill="none" stroke="${win}" stroke-width="6" stroke-linecap="round"/>
-        <path d="${arc(15, 22, 32)}" class="hs-flow"/>`;
-    } else if (kind === "needle") {
-      const [x1, y1] = polar(c, c, 5, 2);
-      const [x2, y2] = polar(c, c, 20, 2);
-      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="hs-needle"/><circle cx="${x2}" cy="${y2}" r="2.6" class="hs-needle-dot"/>`;
-    } else if (kind === "deadline") {
-      const [x1, y1] = polar(c, c, 3, 7);
-      const [x2, y2] = polar(c, c, 18, 7);
-      const [fx, fy] = polar(c, c, 21.5, 7);
-      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="hs-deadline"/><circle cx="${fx}" cy="${fy}" r="3" class="hs-deadline-dot"/>`;
-    } else if (kind === "center") {
-      body = `<circle cx="${c}" cy="${c}" r="15" class="hs-face"/><text x="${c}" y="${c}" class="hs-center" text-anchor="middle" dominant-baseline="central">${esc(String(this._state?.currency || "kr").slice(0, 3))}</text>`;
+  /* A guided tour of the price clock and the panel. The part being explained
+     stays in colour and comes alive; everything else turns grey. */
+  _startTour() {
+    if (!this._state) return;
+    if (this._tab !== "charge") {
+      this._tab = "charge";
+      this._render();
     }
-    return `<svg class="help-swatch" viewBox="0 0 48 48" aria-hidden="true">${kind === "face" || kind === "needle" || kind === "deadline" || kind === "center" ? "" : gradient}${body}</svg>`;
+    this._tour = { step: 0 };
+    this._tourGo(0);
   }
 
-  _openHelp() {
-    const root = this.shadowRoot.querySelector(".sheet-root");
-    const opener = this.shadowRoot.querySelector(".help-btn");
-    const clock = ["face", "bars", "window", "preview", "flow", "needle", "deadline", "center"];
-    const features = ["guest", "battery", "settings", "plan", "status", "facts", "charger", "new", "history", "more"];
-    root.innerHTML = `<div class="scrim"></div>
-      <div class="sheet help" role="dialog" aria-modal="true" aria-labelledby="help-title">
-        <header><h2 id="help-title">${this._t("help_title")}</h2><button class="icon close" aria-label="${this._t("close")}">${ICONS.close}</button></header>
-        <p class="help-intro">${this._t("help_intro")}</p>
-        <h3>${this._t("help_clock")}</h3>
-        <p class="hint">${this._t("help_clock_intro")}</p>
-        <ul class="help-legend">${clock
-          .map(
-            (key) => `<li>${this._helpSwatch(key)}<div><b>${this._t(`help_${key}`)}</b><span>${this._t(`help_${key}_text`)}</span></div></li>`,
-          )
-          .join("")}</ul>
-        <h3>${this._t("help_features")}</h3>
-        <dl class="help-features">${features
-          .map((key) => `<div><dt>${this._t(`help_f_${key}`)}</dt><dd>${this._t(`help_f_${key}_text`)}</dd></div>`)
-          .join("")}</dl>
+  _tourSteps() {
+    const root = this.shadowRoot;
+    return TOUR.map((step, index) => ({ ...step, index })).filter((step) => {
+      if (step.key === "deadline") return this._inputs.use_completion_time !== false;
+      if (step.target) {
+        const el = root.querySelector(step.target);
+        return el && !el.hidden;
+      }
+      return true;
+    });
+  }
+
+  _tourGo(index) {
+    const steps = this._tourSteps();
+    if (index < 0 || index >= steps.length) {
+      this._endTour();
+      return;
+    }
+    this._tour = { step: steps[index].index, pos: index, total: steps.length };
+    this._tourAnimate = !reducedMotion();
+    this._renderLive();
+    this._tourAnimate = false;
+    this._renderTourCard();
+  }
+
+  _endTour() {
+    this._tour = null;
+    this.shadowRoot.querySelector(".tour-card")?.remove();
+    this._clearTour();
+    this._renderLive();
+    this.shadowRoot.querySelector(".help-btn")?.focus();
+  }
+
+  _clearTour() {
+    const root = this.shadowRoot;
+    root.querySelector(".app")?.classList.remove("touring");
+    root.querySelectorAll(".tour-dim, .tour-hl").forEach((el) => el.classList.remove("tour-dim", "tour-hl"));
+    const svg = root.querySelector(".dial");
+    if (svg) svg.className.baseVal = svg.className.baseVal.replace(/\s*tour-\S+/g, "");
+  }
+
+  /* Grey out everything except the explained part. Runs after every render. */
+  _applyTour() {
+    this._clearTour();
+    if (!this._tour) return;
+    const root = this.shadowRoot;
+    const step = TOUR[this._tour.step];
+    const target = step.part ? root.querySelector(`.dial [data-part="${step.part}"]`) : root.querySelector(step.target);
+    if (!target) return;
+    const app = root.querySelector(".app");
+    app.classList.add("touring");
+    target.classList.add("tour-hl");
+    root.querySelector(".dial")?.classList.add(`tour-step-${step.key}`);
+    // Dim the siblings of the target and of each of its ancestors.
+    for (let el = target; el && el !== app; el = el.parentElement) {
+      const parent = el.parentElement;
+      if (!parent) break;
+      for (const sibling of parent.children) {
+        if (sibling === el || sibling.matches("defs, .tour-card, .toast, .sheet-root")) continue;
+        // A filter on the header would pin the fixed tab bar (phones) to the header.
+        if (sibling.matches(".bar")) for (const child of sibling.children) child.classList.add("tour-dim");
+        else sibling.classList.add("tour-dim");
+      }
+    }
+    if (this._tourAnimate) {
+      const svg = root.querySelector(".dial");
+      if (step.part) svg.classList.add(`tour-anim-${step.key}`);
+      if (step.key === "center") {
+        const big = root.querySelector(".dial-center .big");
+        const plan = this._shownPlan();
+        if (big && plan) this._countUp(big, plan.cost);
+        root.querySelector(".dial-center")?.classList.add("tour-pop");
+      }
+      if (!step.part) target.classList.add("tour-pulse");
+      setTimeout(() => target.classList.remove("tour-pulse"), 1600);
+      const scrollTo = step.part || step.key === "center" ? root.querySelector(".dial-wrap") : target;
+      const narrow = innerWidth <= 860;
+      scrollTo?.scrollIntoView({ block: narrow ? "start" : "center", behavior: "smooth" });
+    }
+    this._placeTourCard(step.part || step.key === "center" ? root.querySelector(".dial-wrap") : target);
+  }
+
+  /* Keep the card clear of what it explains: on the other side, or at the top for wide parts. */
+  _placeTourCard(target) {
+    const card = this.shadowRoot.querySelector(".tour-card");
+    if (!card || !target) return;
+    const rect = target.getBoundingClientRect();
+    let side = "left";
+    if (rect.width > innerWidth * 0.6) side = "top";
+    else if (rect.left + rect.width / 2 < innerWidth / 2) side = "right";
+    card.dataset.side = side;
+  }
+
+  _renderTourCard() {
+    const root = this.shadowRoot;
+    let card = root.querySelector(".tour-card");
+    if (!card) {
+      card = document.createElement("div");
+      card.className = "tour-card";
+      card.setAttribute("role", "dialog");
+      card.setAttribute("aria-live", "polite");
+      root.querySelector(".app").appendChild(card);
+      this._placeTourCard(root.querySelector(".dial-wrap"));
+      card.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") this._endTour();
+        else if (ev.key === "ArrowRight") this._tourGo(this._tour.pos + 1);
+        else if (ev.key === "ArrowLeft") this._tourGo(this._tour.pos - 1);
+      });
+    }
+    const { pos, total } = this._tour;
+    const step = TOUR[this._tour.step];
+    const example = step.part === "window" && !this._shownPlan() ? `<p class="tour-note">${this._t("tour_example")}</p>` : "";
+    const text = step.intro ? `${this._t(step.intro)} ${this._t(`${step.text}`)}` : this._t(step.text);
+    card.innerHTML = `
+      <div class="tour-progress" aria-hidden="true"><i style="width:${(((pos + 1) / total) * 100).toFixed(1)}%"></i></div>
+      <header><span class="tour-count">${this._t("tour_step", { n: pos + 1, total })}</span>
+        <button class="icon close" aria-label="${this._t("tour_close")}">${ICONS.close}</button></header>
+      <h3>${this._t(step.title)}</h3>
+      <p>${text}</p>${example}
+      <div class="tour-actions">
+        <button class="btn ghost back" ${pos === 0 ? "disabled" : ""}>${this._t("tour_back")}</button>
+        <button class="btn primary next">${pos === total - 1 ? this._t("tour_done") : this._t("tour_next")}</button>
       </div>`;
-    const close = () => {
-      root.innerHTML = "";
-      root.onkeydown = null;
-      opener?.focus();
-    };
-    root.querySelector(".scrim").onclick = close;
-    root.querySelector(".close").onclick = close;
-    root.onkeydown = (ev) => {
-      if (ev.key === "Escape") close();
-    };
-    root.querySelector(".close").focus();
+    card.querySelector(".close").onclick = () => this._endTour();
+    card.querySelector(".back").onclick = () => this._tourGo(pos - 1);
+    card.querySelector(".next").onclick = () => this._tourGo(pos + 1);
+    card.querySelector(".next").focus({ preventScroll: true });
   }
 
   // ------------------------------------------------------------------ settings tab
@@ -2061,29 +2204,59 @@ input[type="range"] { width: 100%; accent-color: var(--evg-a); }
 .receipt .sub { margin: 4px 0 12px; color: var(--evg-soft); display: flex; gap: 8px; align-items: center; }
 .receipt pre { margin: 0; white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.55; }
 .sheet .segmented { margin-bottom: 4px; }
-.sheet.help { width: min(640px, 100%); }
-.sheet.help h3 { margin: 22px 0 6px; font-size: 15px; }
-.help-intro { margin: 10px 0 0; line-height: 1.5; }
-.sheet.help .hint { margin: 0 0 10px; color: var(--evg-soft); font-size: 14px; }
-.help-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.help-legend li { display: grid; grid-template-columns: 48px 1fr; gap: 14px; align-items: start; }
-.help-legend b { display: block; font-weight: 600; margin-bottom: 2px; }
-.help-legend span { color: var(--evg-soft); font-size: 14px; line-height: 1.45; }
-.help-swatch { width: 48px; height: 48px; overflow: visible; }
-.help-swatch .hs-face { fill: color-mix(in srgb, var(--evg-ink) 3%, transparent); stroke: var(--evg-line); }
-.help-swatch .hs-tick { stroke: var(--evg-soft); stroke-opacity: .45; stroke-width: 1.2; }
-.help-swatch .hs-tick.major { stroke-opacity: .9; stroke-width: 2; }
-.help-swatch .hs-flow { fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1.5 5; opacity: .9; animation: flow 1.2s linear infinite; }
-.help-swatch .hs-needle { stroke: var(--evg-ink); stroke-width: 2.2; stroke-linecap: round; }
-.help-swatch .hs-needle-dot { fill: var(--evg-ink); }
-.help-swatch .hs-deadline { stroke: var(--evg-ink); stroke-width: 1.5; stroke-dasharray: 2.5 3; opacity: .6; }
-.help-swatch .hs-deadline-dot { fill: var(--evg-card); stroke: var(--evg-ink); stroke-width: 2; }
-.help-swatch .hs-center { font-size: 10px; font-weight: 650; fill: var(--evg-ink); }
-.help-features { margin: 0; display: grid; gap: 12px; }
-.help-features div { display: grid; grid-template-columns: 170px 1fr; gap: 12px; }
-.help-features dt { font-weight: 600; }
-.help-features dd { margin: 0; color: var(--evg-soft); font-size: 14px; line-height: 1.45; }
 .help-btn { color: var(--app-header-text-color, var(--evg-soft)); }
+
+/* ---------- tour */
+.touring .tour-dim { filter: grayscale(1); opacity: .3; transition: filter .45s, opacity .45s; }
+.touring svg .tour-dim { filter: url(#tour-gray); opacity: .22; }
+.touring .tour-hl { transition: filter .45s, opacity .45s; }
+.touring .tour-pulse { animation: tour-pulse 1.4s ease-out; border-radius: 16px; }
+.dial .tour-label rect { fill: var(--evg-card); stroke: currentColor; stroke-width: 1.5; }
+.dial .tour-label text { font-size: 12px; font-weight: 650; fill: var(--evg-ink); }
+.dial .tour-label.cheap { color: #00B894; }
+.dial .tour-label.dear { color: #E4572E; }
+.dial .tour-preview { fill: none; stroke: url(#win); stroke-width: 18; stroke-linecap: butt; stroke-dasharray: .03 .022; animation: march 1.6s linear infinite; }
+.dial.tour-step-preview [data-part="window"] .window, .dial.tour-step-preview [data-part="window"] .window-glow { opacity: 0; transition: opacity .5s; }
+.dial.tour-anim-face .tick { animation: tick-in .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--k) * 35ms); transform-origin: 200px 200px; }
+.dial.tour-anim-face .hour { animation: rise .5s both; animation-delay: calc(var(--k) * 35ms + 300ms); }
+.dial.tour-anim-bars .bar { animation: bar-in .6s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d); }
+.dial .tour-label { animation: label-in .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(900ms + var(--i) * 250ms); transform-box: fill-box; transform-origin: center; }
+.dial.tour-anim-window .window-glow { animation: glow-pulse 1.6s ease-in-out 1.1s 2; }
+.dial.tour-anim-needle [data-part="needle"] { animation: needle-sweep 1.6s cubic-bezier(.3,.7,.2,1) both; transform-origin: 200px 200px; }
+.dial.tour-anim-deadline .deadline-line { stroke-dasharray: 3 4; animation: dash-in 1s linear both; }
+.dial.tour-anim-deadline .deadline-dot { animation: ring-pulse .9s ease-in-out .3s 3; }
+.dial-center.tour-pop { animation: pop .6s cubic-bezier(.2,.8,.2,1); }
+.tour-card { position: fixed; z-index: 22; bottom: calc(24px + var(--evg-safe-bottom)); width: min(420px, calc(100% - 24px));
+  background: var(--evg-card); color: var(--evg-ink); border: 1px solid var(--evg-line); border-radius: 18px; padding: 14px 16px 16px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.28); animation: tour-in .35s cubic-bezier(.2,.8,.2,1); overflow: hidden;
+  transition: left .45s cubic-bezier(.2,.8,.2,1), right .45s cubic-bezier(.2,.8,.2,1), top .45s, bottom .45s; }
+.tour-card[data-side="left"] { left: 24px; right: auto; }
+.tour-card[data-side="right"] { right: 24px; left: auto; }
+.tour-card[data-side="top"] { top: 76px; bottom: auto; right: 24px; left: auto; }
+.touring .tour-hl { scroll-margin-top: 76px; }
+.dial.tour-step-face .tick { stroke: #00B894; stroke-opacity: .95; }
+.dial.tour-step-face .hour { fill: var(--evg-ink); font-weight: 650; }
+.dial.tour-step-face .face { fill: color-mix(in srgb, #00B894 7%, transparent); stroke: #00B894; }
+.tour-card header { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+.tour-card .icon { width: 32px; height: 32px; }
+.tour-count { font-size: 13px; color: var(--evg-soft); font-variant-numeric: tabular-nums; }
+.tour-card h3 { margin: 2px 0 4px; font-size: 17px; }
+.tour-card p { margin: 0; color: var(--evg-soft); font-size: 14px; line-height: 1.5; }
+.tour-card p.tour-note { margin-top: 6px; color: var(--evg-a); font-size: 13px; }
+.tour-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.tour-actions .btn { min-width: 96px; justify-content: center; }
+.tour-progress { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--evg-line); }
+.tour-progress i { display: block; height: 100%; background: linear-gradient(90deg, #00B894, #A3E635); transition: width .4s cubic-bezier(.2,.8,.2,1); }
+@keyframes tour-in { from { opacity: 0; translate: 0 24px; } }
+@keyframes tick-in { from { opacity: 0; transform: scale(.9); } }
+@keyframes label-in { from { opacity: 0; transform: scale(.6); } }
+@keyframes glow-pulse { 50% { opacity: .9; } }
+@keyframes needle-sweep { from { transform: rotate(var(--from)); } }
+@keyframes dash-in { from { stroke-dashoffset: 120; stroke-dasharray: 3 4 0 200; } }
+@keyframes ring-pulse { 50% { transform: scale(1.8); } }
+@keyframes march { to { stroke-dashoffset: -.104; } }
+@keyframes pop { 40% { transform: scale(1.08); } }
+@keyframes tour-pulse { 0% { box-shadow: 0 0 0 0 rgba(0,184,148,.55); } 100% { box-shadow: 0 0 0 16px rgba(0,184,148,0); } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes up { from { transform: translate(-50%, 100%); } }
 
@@ -2103,6 +2276,7 @@ input[type="range"] { width: 100%; accent-color: var(--evg-a); }
   .totals dd { font-size: 18px; }
   .sources div { grid-template-columns: 1fr; gap: 2px; }
   .toast { bottom: calc(84px + var(--evg-safe-bottom)); }
+  .tour-card, .tour-card[data-side] { left: 12px; right: 12px; width: auto; top: auto; bottom: calc(84px + var(--evg-safe-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
