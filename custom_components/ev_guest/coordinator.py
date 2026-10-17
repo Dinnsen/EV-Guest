@@ -292,6 +292,9 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         while self._unsub:
             self._unsub.pop()()
         self._cancel_plan_boundaries()
+        # Write now instead of after the save delay: a reload (e.g. after an
+        # options change) would otherwise load the state from before.
+        await self._store.async_save(self._data_to_store())
         await super().async_shutdown()
 
     async def _async_update_data(self) -> EVGuestData:

@@ -28,7 +28,9 @@ from .const import (
     STORAGE_VERSION,
 )
 from .coordinator import EVGuestConfigEntry, EVGuestCoordinator
+from .panel import async_register_panel, async_unregister_panel
 from .services import async_setup_services
+from .websocket import async_register_websocket
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,8 +38,9 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the EV Guest actions."""
+    """Set up the EV Guest actions and the panel's websocket commands."""
     async_setup_services(hass)
+    async_register_websocket(hass)
     return True
 
 
@@ -48,6 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EVGuestConfigEntry) -> b
     await coordinator.async_initialize()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_register_panel(hass)
     return True
 
 
@@ -56,6 +60,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: EVGuestConfigEntry) -> 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         await entry.runtime_data.async_shutdown()
+        if not [other for other in hass.config_entries.async_loaded_entries(DOMAIN) if other is not entry]:
+            async_unregister_panel(hass)
     return unload_ok
 
 
