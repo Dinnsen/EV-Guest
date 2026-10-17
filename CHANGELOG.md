@@ -4,9 +4,12 @@ All notable changes to EV Guest. The version is the one in `custom_components/ev
 
 ## [0.10.0] - 2026-10-17
 
-How far the guest car has come – without the car in Home Assistant.
+Your charger follows the plan – any charger – and is always handed back when the guest has gone. And you see how far the guest car has come.
 
 ### Added
+- **Charger control** (`sensor.ev_guest_charger_control`): `released`, `charge` or `pause`. EV Guest only holds the charger during a guest session, and a session always ends by itself (plan end, New guest, failed calculation, car unplugged).
+- Optional **car connected sensor**: ends the session when the car is unplugged, and keeps a guest car that is still plugged in after the plan paused (at most 24 hours).
+- **Blueprint** *EV Guest – charger follows the plan* for any charger.
 - **Estimated SoC** (`sensor.ev_guest_estimated_soc`): the guest car's estimated charge level, from the plan without an energy meter and from the measured energy with one. Updated every minute while the car charges.
 - **Behind plan** (`binary_sensor.ev_guest_behind_plan`), only with an energy meter: on when the charger has delivered clearly less than planned.
 - The panel shows the measured charge level and warns when the car is behind its plan.

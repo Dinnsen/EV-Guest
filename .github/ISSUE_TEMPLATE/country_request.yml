@@ -1,0 +1,75 @@
+name: New country / license plate lookup
+description: Ask for EV Guest in your country – license plate lookup and the plate in the panel.
+title: "[Country] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! To support a country, EV Guest needs a service that looks up a car from its license plate,
+        and to know what plates look like there. Everything else (prices, planning, charger control) already
+        works in any country with a supported price sensor.
+
+        Please don't post real license plates, API keys or personal data.
+  - type: input
+    id: country
+    attributes:
+      label: Country
+      placeholder: Sweden
+    validations:
+      required: true
+  - type: input
+    id: service
+    attributes:
+      label: License plate lookup service
+      description: Name and website of a service that returns the make, model and ideally the VIN of a car from its plate.
+      placeholder: "Example: Biluppgifter – https://biluppgifter.se"
+    validations:
+      required: true
+  - type: dropdown
+    id: access
+    attributes:
+      label: Access to the service
+      options:
+        - Free, no key
+        - Free with an API key
+        - Paid
+        - I don't know
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: API documentation
+      description: A link to the API documentation, if there is one.
+  - type: textarea
+    id: response
+    attributes:
+      label: Example response
+      description: An example answer from the API for one car, with personal data removed. It shows which fields there are.
+      render: json
+  - type: textarea
+    id: plate
+    attributes:
+      label: What license plates look like
+      description: |
+        The panel draws the guest's plate. Describe a normal plate in your country: colours, the EU band and
+        country code, and the format of the letters and numbers (e.g. "ABC 123"). A link to a picture
+        (e.g. Wikipedia) helps.
+      placeholder: "White plate, black letters, blue EU band with S. Format: ABC 12A."
+    validations:
+      required: true
+  - type: input
+    id: price_sensor
+    attributes:
+      label: Price sensor
+      description: Which electricity price integration do you use? (Nord Pool from HACS works in most of Europe.)
+      placeholder: Nord Pool
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I can test a beta version with my own key.
+        - label: I can translate EV Guest into my language (see the translation template).
+        - label: I would like to make the pull request myself (see CONTRIBUTING.md).

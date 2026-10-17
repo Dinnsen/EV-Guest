@@ -16,7 +16,7 @@
 
 🇩🇰 [Læs på dansk](README.da.md)
 
-A guest arrives with an electric car and leaves in the morning. EV Guest finds the cheapest hours to charge it from your electricity prices – without adding the car to Home Assistant. Enter the license plate, say how full the battery is and when the car must be ready, and EV Guest plans the charging, shows what it costs and what you save, and turns on **Charge now** exactly when the plan says charge.
+A guest arrives with an electric car and leaves in the morning. EV Guest finds the cheapest hours to charge it from your electricity prices – without adding the car to Home Assistant. Enter the license plate, say how full the battery is and when the car must be ready, and EV Guest plans the charging, shows what it costs and what you save, and starts and pauses your charger exactly when the plan says – then hands it back when the guest has gone.
 
 EV Guest is a calculator: it never switches a charger itself. A two-line automation or [EV Smart Charging](https://github.com/jonasbkarlsson/ev_smart_charging) does the charging.
 
@@ -123,7 +123,7 @@ Add **EV Guest** under **Settings → Devices & services → Add integration**.
 
 Afterwards:
 
-- **Configure** (options) changes the currency and the **charger energy meter**. Changes apply right away.
+- **Configure** (options) changes the currency, the **charger energy meter** and the **car connected sensor** (the charger's "car connected" binary sensor, which ends the guest session when the car is unplugged). Both are optional. Changes apply right away.
 - **Reconfigure** changes the price sensor, country or MotorAPI key.
 - If the MotorAPI key stops working, Home Assistant asks you for a new one.
 
@@ -134,7 +134,7 @@ Afterwards:
 1. Enter the guest's **license plate** and tap **Look up**. Check the car and the battery.
 2. Drag the battery to the charge level **now** and the **target**, and choose the charger power and **Ready by**.
 3. Tap **Make plan**. The status shows when charging starts.
-4. Let an automation or EV Smart Charging follow **Charge now** (see [Charging the car](#charging-the-car)).
+4. Let the blueprint start and pause your charger with the plan (see [Charging the car](#charging-the-car)).
 5. When the guest has left, tap **New guest**. The finished charge is in **History**.
 
 Several EV Guests (e.g. two chargers)? Choose between them at the top of the panel.
@@ -161,6 +161,7 @@ Everything in the panel is also available as entities, for automations and dashb
 | Grab car data | Button | Look up the car from the plate. |
 | Calculate | Button | Make a new plan. |
 | New guest | Button | Clear the guest and the plan, ready for the next car. |
+| Charger control | Sensor (enum) | *Released*, *Charge* or *Pause*: what the charger should do (see [Charging the car](#charging-the-car)). Attributes: `session_ends`, `released_at`, `release_reason`, `car_connected`. |
 | Charge now | Binary sensor | On exactly while the plan says charge. |
 | Behind plan | Binary sensor (problem) | Only with an energy meter: on when the charger has delivered clearly less than planned (below 80 % and at least 1 kWh short, after 20 minutes of charging). |
 | Estimated SoC | Sensor (%) | The guest car's estimated charge level: from the plan, or from the energy meter when one is set. Attributes: `source` (`plan`/`meter`), `start_soc`, `target_soc`, `planned_soc`, `planned_energy`. |
@@ -201,20 +202,45 @@ action: ev_guest.calculate
 
 ## Charging the car
 
-### With an automation
+EV Guest plans; your charger does the charging. **Charger control** (`sensor.ev_guest_charger_control`) tells the charger what to do:
 
-```yaml
-automation:
-  - alias: Guest charging follows EV Guest
-    triggers:
-      - trigger: state
-        entity_id: binary_sensor.ev_guest_charge_now
-    actions:
-      - action: >-
-          switch.turn_{{ 'on' if trigger.to_state.state == 'on' else 'off' }}
-        target:
-          entity_id: switch.my_charger
-```
+| State | Meaning |
+| --- | --- |
+| `released` | No guest. Leave the charger alone – it is yours. |
+| `charge` | Guest, inside a charging period: let the charger charge. |
+| `pause` | Guest, outside a charging period: pause the charger. |
+
+A **guest session** starts when you make a plan and always ends by itself, so EV Guest never holds the charger because it thinks a guest is still there:
+
+- when the plan ends,
+- when you tap **New guest**, or a new calculation fails,
+- when the car has been unplugged for a minute (with a **car connected sensor**, see [Setup](#setup)).
+
+With a car connected sensor, a guest car that is still plugged in after the plan stays paused until it is unplugged – at most 24 hours – so it does not charge on at full price. Without one, the charger is released when the plan ends.
+
+### With the blueprint (recommended)
+
+[![Open your Home Assistant instance and show the blueprint import dialog.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FDinnsen%2FEV-Guest%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fev_guest%2Fcharger_follows_ev_guest.yaml)
+
+The blueprint *EV Guest – charger follows the plan* works with any charger: you choose what starts and what pauses charging.
+
+| Charger | Start charging | Pause charging |
+| --- | --- | --- |
+| Zaptec ([HACS](https://github.com/custom-components/zaptec)) | Turn on the *Charging* switch | Turn off the *Charging* switch |
+| Monta ([hass-monta](https://github.com/nickknissen/hass-monta)) | `monta.start_charging` with your charge point | `monta.stop_charging` with your charge point |
+| Wallbox, Easee and others with a switch | Turn on the switch | Turn off the switch |
+| OCPP ([HACS](https://github.com/lbbrhzn/ocpp)) | Set *Maximum current* to your normal current | Set *Maximum current* to 0 A |
+| Tesla Wall Connector | – | – (it cannot be controlled from Home Assistant) |
+
+The blueprint:
+
+- charges and pauses with the plan, and pauses again when a car is plugged in outside a charging period (most chargers start by themselves),
+- hands the charger back (runs *Start charging*) when the guest session ends – only after it has held the charger, never on its own,
+- catches up after a Home Assistant restart: it follows a running session, or hands back a charger whose session ended while Home Assistant was down.
+
+### With your own automation
+
+Follow `sensor.ev_guest_charger_control`: start charging on `charge`, pause on `pause`, and hand the charger back only when it changes from `charge` or `pause` to `released`. `binary_sensor.ev_guest_charge_now` still shows the planned periods, but don't switch a charger on it alone: it is also off when there is no guest.
 
 ### With EV Smart Charging
 
@@ -253,6 +279,7 @@ Use a sensor with the prices you actually pay (with tariffs and taxes) to get th
 - License plate lookup works in Denmark only. Without it, set the battery capacity yourself.
 - The battery match from Open EV Data is a best guess; check it, especially for rare variants.
 - Charging is assumed to run at the set power the whole time; real cars slow down near full. A target of 80–90 % keeps the plan close to reality.
+- If the guest's car is unplugged and another car plugged in within a minute, EV Guest takes it for the same car. Tap **New guest** to release the charger.
 - EV Guest does not see the car's live charge level. *Estimated SoC* is an estimate from the plan or the meter.
 - Some chargers report their energy meter only now and then. *Behind plan* can then turn on for a while until the next reading.
 - Home Assistant's own Nord Pool integration has no price attributes; use the Nord Pool integration from HACS or Energi Data Service.
@@ -285,7 +312,7 @@ EV Guest is not affiliated with, endorsed by or maintained by Home Assistant, Mo
 
 ## Support
 
-Found a bug or have an idea? [Open an issue](https://github.com/Dinnsen/EV-Guest/issues). If EV Guest saves you money, you are welcome to [buy me a coffee](https://buymeacoffee.com/dinnsen) ☕
+Found a bug or have an idea? [Open an issue](https://github.com/Dinnsen/EV-Guest/issues/new/choose). Want EV Guest in your country or language? There are templates for that too, and [CONTRIBUTING.md](CONTRIBUTING.md) shows how to add them yourself. If EV Guest saves you money, you are welcome to [buy me a coffee](https://buymeacoffee.com/dinnsen) ☕
 
 ## Licence
 

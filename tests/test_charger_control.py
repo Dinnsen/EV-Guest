@@ -176,7 +176,8 @@ async def test_unplugging_ends_the_session(
     coordinator = car_integration.runtime_data
     [entry] = coordinator.history
     assert entry["measured_energy"] == pytest.approx(10)
-    assert datetime.fromisoformat(entry["end"]) <= unplugged
+    # Recorded up to when the guest left (a minute after unplugging), not to the plan's end.
+    assert unplugged - timedelta(minutes=2) <= datetime.fromisoformat(entry["end"]) <= unplugged + timedelta(seconds=1)
     hass.states.async_set(METER, "1030.0", {"unit_of_measurement": "kWh"})
     await hass.async_block_till_done()
     assert float(hass.states.get("sensor.ev_guest_measured_energy").state) == pytest.approx(10)
