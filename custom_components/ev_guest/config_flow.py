@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
 
 from .api import EVGuestAuthError, EVGuestLookupError, async_validate_plate_provider_credentials
 from .const import (
@@ -32,6 +31,7 @@ from .const import (
     DOMAIN,
 )
 from .prices import extract_price_slots
+from .schema import vol
 
 PRICE_ENTITY_SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 COUNTRY_SELECTOR = selector.SelectSelector(

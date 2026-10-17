@@ -100,14 +100,15 @@ def get_default_plate_provider(country: str | None) -> str:
     """Return the default vehicle lookup provider for a country."""
     if not country:
         return DEFAULT_PLATE_PROVIDER
-    return PLATE_PROVIDER_REGISTRY.get(country, {}).get("default", DEFAULT_PLATE_PROVIDER)
+    return str(PLATE_PROVIDER_REGISTRY.get(country, {}).get("default", DEFAULT_PLATE_PROVIDER))
 
 
 def get_supported_plate_providers(country: str | None) -> dict[str, Any]:
     """Return the provider mapping for a country."""
     if not country:
         country = COUNTRY_DENMARK
-    return PLATE_PROVIDER_REGISTRY.get(country, {}).get("providers", {})
+    providers: dict[str, Any] = PLATE_PROVIDER_REGISTRY.get(country, {}).get("providers", {})
+    return providers
 
 
 def _extract_float(value: Any) -> float | None:

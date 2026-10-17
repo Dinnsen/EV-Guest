@@ -101,6 +101,15 @@ async function shot(page, selector, file, pad = 0) {
     }
   }
 
+  if (!only || only === "hero") {
+    const page = await browser.newPage({ viewport: { width: 1600, height: 820 }, deviceScaleFactor: 1.5 });
+    await page.goto(`${base}/scripts/screenshots/hero.html`);
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(OUT, "hero.png") });
+    console.log("wrote hero.png");
+    await page.close();
+  }
+
   await browser.close();
   server.close();
 })();

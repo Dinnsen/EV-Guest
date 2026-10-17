@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
 
 from .const import (
     ATTR_AVERAGE_PRICE,
@@ -44,6 +43,7 @@ from .const import (
     RESULT_SAVINGS,
 )
 from .coordinator import EVGuestConfigEntry, EVGuestCoordinator, PlanError, serialize_segments
+from .schema import vol
 
 ENTRY = vol.Optional("entry_id")
 

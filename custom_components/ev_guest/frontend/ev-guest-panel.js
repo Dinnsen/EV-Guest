@@ -1033,6 +1033,9 @@ class EvGuestPanel extends HTMLElement {
     html += `<line x1="${nx1}" y1="${ny1}" x2="${nx2}" y2="${ny2}" class="needle"/><circle cx="${nx2}" cy="${ny2}" r="4.5" class="needle-dot"/>`;
 
     svg.innerHTML = html;
+    // The bars grow in once per page, not on every update.
+    svg.classList.toggle("intro", !svg.dataset.shown);
+    svg.dataset.shown = "1";
     this._renderDialCenter(plan, prices);
   }
 
@@ -1228,6 +1231,8 @@ class EvGuestPanel extends HTMLElement {
       html += `<line x1="${x(nowMs)}" x2="${x(nowMs)}" y1="${top - 8}" y2="${H - bottom}" class="tl-now"/><text x="${x(nowMs) + 5}" y="${top - 1}" class="tl-now-label">${this._t("now")}</text>`;
     }
     svg.innerHTML = html;
+    svg.classList.toggle("intro", !svg.dataset.shown);
+    svg.dataset.shown = "1";
     this._bindScrub(svg, prices, t0, t1);
   }
 
@@ -1632,7 +1637,8 @@ a { color: var(--evg-accent); }
 .dial .tick { stroke: var(--evg-soft); stroke-opacity: .35; stroke-width: 1.2; }
 .dial .tick.major { stroke-opacity: .8; stroke-width: 2; }
 .dial .hour { font-size: 13px; fill: var(--evg-soft); font-variant-numeric: tabular-nums; }
-.dial .bar { opacity: .92; transform-origin: 200px 200px; animation: bar-in .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d); }
+.dial .bar { opacity: .92; transform-origin: 200px 200px; }
+.dial.intro .bar { animation: bar-in .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d); }
 .dial .bar:hover { opacity: 1; }
 @keyframes bar-in { from { opacity: 0; transform: scale(.82); } }
 .dial .window { fill: none; stroke: url(#win); stroke-width: 18; stroke-linecap: round; }
@@ -1797,7 +1803,8 @@ input[type="range"] { width: 100%; accent-color: var(--evg-a); }
 .timeline .day-band { fill: color-mix(in srgb, var(--evg-ink) 3.5%, transparent); }
 .timeline .day { font-size: 13px; fill: var(--evg-soft); font-weight: 500; }
 .timeline .axis { font-size: 12px; fill: var(--evg-soft); font-variant-numeric: tabular-nums; }
-.timeline .tl-bar { opacity: .88; transform-box: fill-box; transform-origin: bottom; animation: grow .6s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d); }
+.timeline .tl-bar { opacity: .88; transform-box: fill-box; transform-origin: bottom; }
+.timeline.intro .tl-bar { animation: grow .6s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d); }
 .timeline .tl-bar.hot { opacity: 1; stroke: var(--evg-ink); stroke-width: 1.5; }
 @keyframes grow { from { transform: scaleY(0); } }
 .timeline .tl-window { fill: color-mix(in srgb, var(--evg-b) 28%, transparent); stroke: url(#tw); stroke-width: 2; }

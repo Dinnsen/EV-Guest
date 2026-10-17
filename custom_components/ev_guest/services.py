@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv, service
-import voluptuous as vol
 
 from .const import ATTR_CONFIG_ENTRY_ID, DOMAIN, SERVICE_CALCULATE, SERVICE_GRAB_CAR_DATA, SERVICE_NEW_GUEST
 from .coordinator import EVGuestCoordinator
+from .schema import vol
 
 # "entry_id" is the field name used before 0.8.0 and is still accepted.
 SERVICE_SCHEMA = vol.All(
