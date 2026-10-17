@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.const import Platform
 
 DOMAIN = "ev_guest"
@@ -15,7 +17,7 @@ PLATFORMS: list[Platform] = [
     Platform.TEXT,
     Platform.TIME,
 ]
-USER_AGENT = "EVGuestHomeAssistant/0.8.0 (+https://github.com/Dinnsen/EV-Guest)"
+USER_AGENT = "EVGuestHomeAssistant/0.9.0 (+https://github.com/Dinnsen/EV-Guest)"
 
 MOTORAPI_BASE_URL = "https://v1.motorapi.dk"
 NHTSA_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/{vin}?format=json"
@@ -27,6 +29,7 @@ CONF_CURRENCY = "currency"
 CONF_MOTORAPI_KEY = "motorapi_api_key"
 CONF_COUNTRY = "country"
 CONF_PLATE_PROVIDER = "plate_provider"
+CONF_ENERGY_ENTITY = "energy_entity"
 
 # Settings that belong to the connection (changed via reconfigure) as opposed
 # to preferences (changed via options).
@@ -49,8 +52,10 @@ INPUT_CHARGE_LIMIT = "charge_limit"
 INPUT_CHARGE_COMPLETION_TIME = "charge_completion_time"
 INPUT_USE_COMPLETION_TIME = "use_completion_time"
 INPUT_CONTINUOUS_CHARGING_PREFERRED = "continuous_charging_preferred"
+INPUT_CHARGING_EFFICIENCY = "charging_efficiency"
 
 DEFAULT_COMPLETION_TIME = "07:00"
+DEFAULT_CHARGING_EFFICIENCY = 90.0
 
 RESULT_CHARGING_SPEED = "charging_speed"
 RESULT_CHARGE_START_TIME = "charge_start_time"
@@ -62,6 +67,10 @@ RESULT_CAR_MODEL = "car_model"
 RESULT_CAR_VARIANT = "car_variant"
 RESULT_CAR_BATTERY_CAPACITY = "car_battery_capacity"
 RESULT_STATUS = "status"
+RESULT_ENERGY = "energy"
+RESULT_SAVINGS = "savings"
+RESULT_MEASURED_ENERGY = "measured_energy"
+RESULT_MEASURED_COST = "measured_cost"
 
 DIAGNOSTIC_CHARGE_NOW = "charge_now"
 
@@ -106,11 +115,12 @@ ATTR_PLAN_MODE = "plan_mode"
 ATTR_CHARGING_SEGMENTS = "charging_segments"
 ATTR_PLAN_LOCKED = "plan_locked"
 ATTR_ERROR_DETAIL = "error_detail"
-ATTR_COUNTRY = "country"
-ATTR_PLATE_PROVIDER = "plate_provider"
+ATTR_CHARGE_NOW_COST = "charge_now_cost"
+ATTR_AVERAGE_PRICE = "average_price"
 
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.{{entry_id}}"
+HISTORY_LIMIT = 100
 
 # Entities removed in later versions, cleaned from the entity registry on setup
 # as (platform, key) pairs.
@@ -120,11 +130,18 @@ LEGACY_ENTITIES = (
 )
 
 DATASET_CACHE_KEY = f"{DOMAIN}_open_ev_data_cache"
+DATASET_CACHE_TTL = timedelta(hours=24)
+
+# Planning without a completion time looks this far ahead.
+PLANNING_HORIZON = timedelta(hours=48)
+# The energy meter is followed this long after a plan ends, for late readings.
+METER_GRACE = timedelta(minutes=10)
 
 SERVICE_GRAB_CAR_DATA = "grab_car_data"
 SERVICE_CALCULATE = "calculate"
+SERVICE_NEW_GUEST = "new_guest"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
 ISSUE_PRICE_ENTITY_MISSING = "price_entity_missing"
 
-REDACT_KEYS = {CONF_MOTORAPI_KEY, ATTR_VIN, INPUT_LICENSE_PLATE}
+REDACT_KEYS = {CONF_MOTORAPI_KEY, ATTR_VIN, INPUT_LICENSE_PLATE, "plate"}

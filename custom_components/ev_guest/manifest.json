@@ -1,12 +1,21 @@
 {
   "domain": "ev_guest",
   "name": "EV Guest",
-  "codeowners": ["@Dinnsen"],
+  "codeowners": [
+    "@Dinnsen"
+  ],
   "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/Dinnsen/EV-Guest",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/Dinnsen/EV-Guest/issues",
+  "quality_scale": "platinum",
   "requirements": [],
-  "version": "0.8.0"
+  "version": "0.9.0"
 }

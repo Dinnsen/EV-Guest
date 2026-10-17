@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Generator, Sequence
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
@@ -35,6 +36,22 @@ SPLIT_PRICES = [1.80, 0.10, 1.50, 0.20, 1.40, 0.30, 1.30]
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow loading custom_components in every test."""
+
+
+@pytest.fixture(autouse=True)
+def skip_panel_dependencies(hass: HomeAssistant) -> None:
+    """The sidebar panel needs the real frontend; mark it as loaded instead."""
+    hass.config.components.update({"frontend", "panel_custom"})
+
+
+@pytest.fixture(autouse=True)
+def mock_panel() -> Generator[tuple[AsyncMock, MagicMock]]:
+    """Don't serve the panel files in tests (that needs the real frontend)."""
+    with (
+        patch("custom_components.ev_guest.async_register_panel") as register,
+        patch("custom_components.ev_guest.async_unregister_panel") as unregister,
+    ):
+        yield register, unregister
 
 
 @pytest.fixture

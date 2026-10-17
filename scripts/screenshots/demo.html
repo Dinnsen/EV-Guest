@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EV Guest demo</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: Roboto, Inter, system-ui, sans-serif; }
+  body.light {
+    --primary-color: #03a9f4; --primary-text-color: #212121; --secondary-text-color: #727272; --card-background-color: #ffffff;
+    --primary-background-color: #f4f5f7; --divider-color: rgba(0, 0, 0, .12); --app-header-background-color: #ffffff;
+    --app-header-text-color: #212121; --error-color: #db4437; background: #f4f5f7;
+  }
+  body.dark {
+    --primary-color: #03a9f4; --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b; --card-background-color: #1c1c1c;
+    --primary-background-color: #111111; --divider-color: rgba(225, 225, 225, .12); --app-header-background-color: #1c1c1c;
+    --app-header-text-color: #e1e1e1; --error-color: #ef5350; background: #111;
+    color-scheme: dark;
+  }
+  ev-guest-panel { display: block; height: 100vh; }
+</style>
+</head>
+<body>
+<script type="module">
+import "../../custom_components/ev_guest/frontend/ev-guest-panel.js";
+import { demoState } from "./demo-data.js";
+
+const params = new URLSearchParams(location.search);
+const lang = params.get("lang") || "da";
+const scene = params.get("scene") || "planned";
+document.body.className = params.get("theme") || "light";
+
+const state = demoState({ now: Date.now(), lang, scene });
+const listeners = [];
+const push = () => listeners.forEach((cb) => cb(structuredClone(state)));
+window.evgDemo = { state, push };
+
+/* A small version of EV Guest's planner, so the demo can preview plans while you drag. */
+function previewPlan(inputs) {
+  const kw = Number(inputs.charger_power);
+  const eff = Number(inputs.charging_efficiency || 90) / 100;
+  const battery = (Number(inputs.battery_capacity) * (Number(inputs.charge_limit) - Number(inputs.soc))) / 100;
+  if (battery <= 0) return { error: "limit_not_above_soc" };
+  const grid = battery / eff;
+  const hours = grid / kw;
+  const now = Date.now();
+  const deadline = new Date(now);
+  const [hh, mm] = String(inputs.charge_completion_time || "07:00").split(":").map(Number);
+  deadline.setHours(hh, mm, 0, 0);
+  if (deadline.getTime() <= now) deadline.setDate(deadline.getDate() + 1);
+  const end = inputs.use_completion_time === false ? now + 48 * 3600000 : deadline.getTime();
+  const slots = state.prices.filter((p) => Date.parse(p.start) >= Math.floor(now / 3600000) * 3600000 + 3600000 && Date.parse(p.end) <= end);
+  const costFrom = (startMs) => {
+    let left = hours, cost = 0;
+    for (const p of state.prices) {
+      const a = Math.max(Date.parse(p.start), startMs), b = Date.parse(p.end);
+      if (b <= a || left <= 0) continue;
+      const h = Math.min(left, (b - a) / 3600000);
+      cost += h * p.price * kw;
+      left -= h;
+    }
+    return left > 1e-9 ? null : cost;
+  };
+  let best = null;
+  for (const p of slots) {
+    const start = Date.parse(p.start);
+    if (start + hours * 3600000 > end) break;
+    const cost = costFrom(start);
+    if (cost !== null && (!best || cost < best.cost - 1e-9)) best = { start, cost };
+  }
+  if (!best) return { error: "no_window" };
+  const minutes = Math.ceil(hours * 60);
+  const nowCost = costFrom(now);
+  return {
+    segments: [{ start: new Date(best.start).toISOString(), end: new Date(best.start + minutes * 60000).toISOString() }],
+    mode: "continuous", cost: best.cost, energy: grid, minutes, speed: (kw * eff / Number(inputs.battery_capacity)) * 100,
+    savings: nowCost === null ? null : nowCost - best.cost, charge_now_cost: nowCost,
+  };
+}
+const hass = {
+  locale: { language: lang },
+  language: lang,
+  states: { "sensor.energi_data_service": { attributes: { friendly_name: "Energi Data Service" } }, "sensor.lader_energi": { attributes: { friendly_name: "Lader energi" } } },
+  callWS: async (msg) => {
+    if (msg.type === "ev_guest/preview") return previewPlan({ ...state.inputs, ...msg.inputs });
+    if (msg.type === "ev_guest/set_inputs") {
+      Object.assign(state.inputs, msg.inputs);
+      push();
+      return null;
+    }
+    if (msg.type === "ev_guest/calculate") {
+      const plan = previewPlan(state.inputs);
+      Object.assign(state.plan, plan, { info: { ...state.plan.info, inputs: { ...state.inputs } } });
+      state.status = "planned";
+      push();
+      return null;
+    }
+    return null;
+  },
+  connection: {
+    subscribeMessage: async (cb) => {
+      listeners.push(cb);
+      setTimeout(() => cb(state), 0);
+      return () => {};
+    },
+  },
+};
+const el = document.createElement("ev-guest-panel");
+el.panel = { config: { static_url: "/", app_url: "/ev_guest_app", version: "demo" } };
+el.narrow = innerWidth < 870;
+el.hass = hass;
+document.body.appendChild(el);
+if (params.get("tab")) setTimeout(() => el.shadowRoot.querySelector(`[data-tab="${params.get("tab")}"]`)?.click(), 50);
+if (params.get("bill")) setTimeout(() => el.shadowRoot.querySelector(".bill")?.click(), 150);
+setTimeout(() => (document.body.dataset.ready = "1"), 1600);
+</script>
+</body>
+</html>

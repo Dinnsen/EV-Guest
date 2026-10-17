@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body { margin: 0; width: 1600px; height: 820px; overflow: hidden; font-family: "Inter Display", Inter, system-ui, sans-serif;
+    background: radial-gradient(1200px 700px at 85% 10%, #1d4a3e 0%, #0e1f1b 55%, #0a1513 100%); color: #f1f5f9; position: relative; }
+  .copy { position: absolute; left: 72px; top: 92px; width: 470px; }
+  .lock { display: flex; align-items: center; gap: 18px; }
+  .lock img { width: 84px; height: 84px; }
+  .lock b { font-size: 64px; font-weight: 800; letter-spacing: -.025em; }
+  .lock b span { background: linear-gradient(90deg, #00B894, #A3E635); -webkit-background-clip: text; color: transparent; }
+  p { font-size: 30px; line-height: 1.3; margin: 34px 0 0; color: #d6e2dd; font-weight: 500; letter-spacing: -.01em; }
+  ul { margin: 34px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; font-size: 21px; color: #b3c4bd; }
+  li { display: flex; gap: 12px; align-items: center; }
+  li::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(90deg, #00B894, #A3E635); flex: none; }
+  .desk { position: absolute; left: 640px; top: 70px; width: 900px; border-radius: 18px; box-shadow: 0 40px 80px -30px rgba(0,0,0,.7); overflow: hidden; border: 1px solid rgba(255,255,255,.12); }
+  .desk img { display: block; width: 100%; }
+  .phone { position: absolute; left: 600px; top: 250px; width: 270px; border-radius: 40px; padding: 10px; background: #050807; box-shadow: 0 40px 80px -20px rgba(0,0,0,.8); }
+  .phone img { display: block; width: 100%; border-radius: 30px; }
+</style></head>
+<body>
+  <div class="copy">
+    <div class="lock"><img src="../../docs/brand/mark.svg" alt=""><b><span>EV</span> Guest</b></div>
+    <p data-en="The cheapest hours to charge your guest’s car – no car integration needed." data-da="De billigste timer til at lade gæstens bil – uden at bilen skal ind i Home Assistant."></p>
+    <ul><li data-en="License plate lookup" data-da="Opslag på nummerplade"></li><li data-en="Cheapest plan before a deadline" data-da="Billigste plan før en frist"></li><li data-en="Savings, history and a bill for the guest" data-da="Besparelse, historik og afregning med gæsten"></li></ul>
+  </div>
+  <div class="desk"><img data-src="panel.png" alt=""></div>
+  <div class="phone"><img data-src="phone-charging.png" alt=""></div>
+  <script>
+    const lang = new URLSearchParams(location.search).get("lang") || "en";
+    document.querySelectorAll("[data-en]").forEach((el) => (el.textContent = el.dataset[lang]));
+    document.querySelectorAll("[data-src]").forEach((el) => (el.src = `../../docs/images/${lang}/${el.dataset.src}`));
+  </script>
+</body></html>

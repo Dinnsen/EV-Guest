@@ -14,6 +14,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .const import (
+    ATTR_AVERAGE_PRICE,
+    ATTR_CHARGE_NOW_COST,
     ATTR_CHARGING_SCHEDULE,
     ATTR_CHARGING_SEGMENTS,
     ATTR_ERROR_DETAIL,
@@ -36,6 +38,10 @@ from .const import (
     RESULT_CHARGE_START_TIME,
     RESULT_CHARGE_TIME,
     RESULT_CHARGING_SPEED,
+    RESULT_ENERGY,
+    RESULT_MEASURED_COST,
+    RESULT_MEASURED_ENERGY,
+    RESULT_SAVINGS,
     RESULT_STATUS,
     STATUS_OPTIONS,
 )
@@ -51,6 +57,8 @@ class EVGuestSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[EVGuestCoordinator], StateType | datetime]
     car_info: bool = False
+    monetary: bool = False
+    needs_meter: bool = False
 
 
 def _result(key: str) -> Callable[[EVGuestCoordinator], StateType]:
@@ -85,7 +93,38 @@ SENSORS: tuple[EVGuestSensorEntityDescription, ...] = (
         key=RESULT_CHARGE_COSTS,
         device_class=SensorDeviceClass.MONETARY,
         suggested_display_precision=2,
+        monetary=True,
         value_fn=_result(RESULT_CHARGE_COSTS),
+    ),
+    EVGuestSensorEntityDescription(
+        key=RESULT_ENERGY,
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value_fn=_result(RESULT_ENERGY),
+    ),
+    EVGuestSensorEntityDescription(
+        key=RESULT_SAVINGS,
+        device_class=SensorDeviceClass.MONETARY,
+        suggested_display_precision=2,
+        monetary=True,
+        value_fn=_result(RESULT_SAVINGS),
+    ),
+    EVGuestSensorEntityDescription(
+        key=RESULT_MEASURED_ENERGY,
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=2,
+        needs_meter=True,
+        value_fn=_result(RESULT_MEASURED_ENERGY),
+    ),
+    EVGuestSensorEntityDescription(
+        key=RESULT_MEASURED_COST,
+        device_class=SensorDeviceClass.MONETARY,
+        suggested_display_precision=2,
+        monetary=True,
+        needs_meter=True,
+        value_fn=_result(RESULT_MEASURED_COST),
     ),
     EVGuestSensorEntityDescription(
         key=RESULT_STATUS,
@@ -128,7 +167,11 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities(EVGuestSensor(coordinator, description) for description in SENSORS)
+    async_add_entities(
+        EVGuestSensor(coordinator, description)
+        for description in SENSORS
+        if coordinator.energy_entity or not description.needs_meter
+    )
 
 
 class EVGuestSensor(EVGuestEntity, SensorEntity):
@@ -139,7 +182,7 @@ class EVGuestSensor(EVGuestEntity, SensorEntity):
     def __init__(self, coordinator: EVGuestCoordinator, description: EVGuestSensorEntityDescription) -> None:
         super().__init__(coordinator, description.key)
         self.entity_description = description
-        if description.key == RESULT_CHARGE_COSTS:
+        if description.monetary:
             self._attr_native_unit_of_measurement = coordinator.currency
 
     @property
@@ -154,9 +197,14 @@ class EVGuestSensor(EVGuestEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
+        results = self.coordinator.data.results
+        if self.entity_description.key == RESULT_SAVINGS:
+            return {
+                ATTR_CHARGE_NOW_COST: results.get(ATTR_CHARGE_NOW_COST),
+                ATTR_AVERAGE_PRICE: results.get(ATTR_AVERAGE_PRICE),
+            }
         if self.entity_description.key != RESULT_STATUS:
             return None
-        results = self.coordinator.data.results
         return {
             ATTR_ERROR_DETAIL: self.coordinator.error_detail,
             ATTR_PLAN_MODE: results.get(ATTR_PLAN_MODE),

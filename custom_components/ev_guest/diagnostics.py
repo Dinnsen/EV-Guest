@@ -22,4 +22,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: EVGuest
         "status": coordinator.status(),
         "plan_locked": coordinator.is_plan_locked(),
         "service_health": dict(coordinator.data.service_health),
+        "energy_meter": coordinator.energy_entity is not None,
+        "plan_info": async_redact_data(coordinator.plan_info or {}, REDACT_KEYS),
+        "history": async_redact_data(coordinator.history, REDACT_KEYS),
+        "settings": coordinator.settings,
     }

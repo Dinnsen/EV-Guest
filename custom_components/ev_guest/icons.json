@@ -14,6 +14,9 @@
       },
       "calculate": {
         "default": "mdi:calculator"
+      },
+      "new_guest": {
+        "default": "mdi:account-plus-outline"
       }
     },
     "number": {
@@ -28,6 +31,9 @@
       },
       "charger_power": {
         "default": "mdi:ev-station"
+      },
+      "charging_efficiency": {
+        "default": "mdi:transmission-tower-export"
       }
     },
     "sensor": {
@@ -71,6 +77,18 @@
       },
       "car_battery_capacity": {
         "default": "mdi:car-battery"
+      },
+      "energy": {
+        "default": "mdi:lightning-bolt"
+      },
+      "savings": {
+        "default": "mdi:piggy-bank-outline"
+      },
+      "measured_energy": {
+        "default": "mdi:meter-electric-outline"
+      },
+      "measured_cost": {
+        "default": "mdi:cash-check"
       }
     },
     "switch": {
@@ -104,6 +122,9 @@
     },
     "calculate": {
       "service": "mdi:calculator"
+    },
+    "new_guest": {
+      "service": "mdi:account-plus-outline"
     }
   }
 }

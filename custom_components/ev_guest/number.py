@@ -7,7 +7,7 @@ from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfEnergy, UnitOf
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import INPUT_BATTERY_CAPACITY, INPUT_CHARGE_LIMIT, INPUT_CHARGER_POWER, INPUT_SOC
+from .const import INPUT_BATTERY_CAPACITY, INPUT_CHARGE_LIMIT, INPUT_CHARGER_POWER, INPUT_CHARGING_EFFICIENCY, INPUT_SOC
 from .coordinator import EVGuestConfigEntry, EVGuestCoordinator
 from .entity import EVGuestEntity
 
@@ -51,10 +51,16 @@ NUMBERS: tuple[NumberEntityDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
         mode=NumberMode.BOX,
     ),
+    NumberEntityDescription(
+        key=INPUT_CHARGING_EFFICIENCY,
+        native_min_value=50,
+        native_max_value=100,
+        native_step=1,
+        native_unit_of_measurement=PERCENTAGE,
+        entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.BOX,
+    ),
 )
-
-# Kept for backwards compatibility with code that imports the input keys.
-NUMBER_SPECS = {description.key: description for description in NUMBERS}
 
 
 async def async_setup_entry(

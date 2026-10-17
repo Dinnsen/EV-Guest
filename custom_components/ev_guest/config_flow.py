@@ -11,12 +11,12 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
 
 from .api import EVGuestAuthError, EVGuestLookupError, async_validate_plate_provider_credentials
 from .const import (
     CONF_COUNTRY,
     CONF_CURRENCY,
+    CONF_ENERGY_ENTITY,
     CONF_MOTORAPI_KEY,
     CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
@@ -31,11 +31,13 @@ from .const import (
     DOMAIN,
 )
 from .prices import extract_price_slots
+from .schema import vol
 
 PRICE_ENTITY_SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 COUNTRY_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(options=COUNTRIES, mode=selector.SelectSelectorMode.DROPDOWN)
 )
+ENERGY_ENTITY_SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="energy"))
 API_KEY_SELECTOR = selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))
 
 
@@ -194,6 +196,11 @@ class EVGuestOptionsFlow(OptionsFlowWithReload):
                 vol.Required(CONF_CURRENCY, default=current or _default_currency(self.hass)): _currency_selector(
                     self.hass
                 ),
+                # Optional and can be cleared, so a suggestion instead of a default.
+                vol.Optional(
+                    CONF_ENERGY_ENTITY,
+                    description={"suggested_value": self.config_entry.options.get(CONF_ENERGY_ENTITY)},
+                ): ENERGY_ENTITY_SELECTOR,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 import logging
-from math import ceil
 from typing import Any, NoReturn
+from uuid import uuid4
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
+from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -30,6 +32,8 @@ from .api import (
     get_default_plate_provider,
 )
 from .const import (
+    ATTR_AVERAGE_PRICE,
+    ATTR_CHARGE_NOW_COST,
     ATTR_CHARGING_SCHEDULE,
     ATTR_CHARGING_SEGMENTS,
     ATTR_FUEL_TYPE,
@@ -43,9 +47,12 @@ from .const import (
     ATTR_VIN,
     CONF_COUNTRY,
     CONF_CURRENCY,
+    CONF_ENERGY_ENTITY,
     CONF_MOTORAPI_KEY,
     CONF_PLATE_PROVIDER,
     CONF_PRICE_ENTITY,
+    DATASET_CACHE_KEY,
+    DEFAULT_CHARGING_EFFICIENCY,
     DEFAULT_COMPLETION_TIME,
     DEFAULT_COUNTRY,
     DEFAULT_CURRENCY,
@@ -53,22 +60,22 @@ from .const import (
     ERROR_INVALID_API_KEY,
     ERROR_INVALID_INPUT,
     ERROR_LICENSE_PLATE_REQUIRED,
-    ERROR_LIMIT_NOT_ABOVE_SOC,
     ERROR_LOOKUP_FAILED,
     ERROR_MOTORAPI_KEY_MISSING,
-    ERROR_NO_PRICE_DATA,
-    ERROR_NO_WINDOW,
-    ERROR_NOT_ENOUGH_PRICES,
     ERROR_VEHICLE_NOT_FOUND,
+    HISTORY_LIMIT,
     INPUT_BATTERY_CAPACITY,
     INPUT_CHARGE_COMPLETION_TIME,
     INPUT_CHARGE_LIMIT,
     INPUT_CHARGER_POWER,
+    INPUT_CHARGING_EFFICIENCY,
     INPUT_CONTINUOUS_CHARGING_PREFERRED,
     INPUT_LICENSE_PLATE,
     INPUT_SOC,
     INPUT_USE_COMPLETION_TIME,
     ISSUE_PRICE_ENTITY_MISSING,
+    METER_GRACE,
+    PLANNING_HORIZON,
     RESULT_CAR_BATTERY_CAPACITY,
     RESULT_CAR_BRAND,
     RESULT_CAR_MODEL,
@@ -76,6 +83,10 @@ from .const import (
     RESULT_CHARGE_COSTS,
     RESULT_CHARGE_TIME,
     RESULT_CHARGING_SPEED,
+    RESULT_ENERGY,
+    RESULT_MEASURED_COST,
+    RESULT_MEASURED_ENERGY,
+    RESULT_SAVINGS,
     STATUS_CHARGING,
     STATUS_COMPLETED,
     STATUS_PLANNED,
@@ -83,20 +94,51 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
-from .prices import PriceSlot, extract_price_slots
+from .planner import (
+    Plan,
+    PlanError,
+    PriceSlot,
+    Segment,
+    charge_need,
+    make_plan,
+    merge_segments,
+    price_at,
+    segments_to_schedule,
+)
+from .prices import extract_price_slots
 
 _LOGGER = logging.getLogger(__name__)
 
 type EVGuestConfigEntry = ConfigEntry[EVGuestCoordinator]
-type Segment = dict[str, datetime]
 
+__all__ = ["EVGuestConfigEntry", "EVGuestCoordinator", "PlanError", "merge_segments"]
 
-class PlanError(Exception):
-    """A charging plan could not be made; ``key`` is a status/translation key."""
-
-    def __init__(self, key: str) -> None:
-        super().__init__(key)
-        self.key = key
+CAR_RESULTS = (
+    RESULT_CAR_BRAND,
+    RESULT_CAR_MODEL,
+    RESULT_CAR_VARIANT,
+    RESULT_CAR_BATTERY_CAPACITY,
+    ATTR_VIN,
+    ATTR_MODEL_YEAR,
+    ATTR_FUEL_TYPE,
+    ATTR_MATCH_SCORE,
+    ATTR_LAST_SOURCE,
+    ATTR_LAST_LOOKUP,
+)
+PLAN_RESULTS = (
+    RESULT_CHARGING_SPEED,
+    RESULT_CHARGE_TIME,
+    RESULT_CHARGE_COSTS,
+    RESULT_ENERGY,
+    RESULT_SAVINGS,
+    ATTR_CHARGE_NOW_COST,
+    ATTR_AVERAGE_PRICE,
+)
+SETTING_BILL_PRICE = "bill_price"
+SETTING_PAYMENT_TEXT = "payment_text"
+DEFAULT_SETTINGS: dict[str, Any] = {SETTING_BILL_PRICE: None, SETTING_PAYMENT_TEXT: ""}
+# A single meter step above this is a glitch, not a charge.
+MAX_METER_STEP_KWH = 100.0
 
 
 @dataclass(slots=True)
@@ -111,8 +153,9 @@ class EVGuestData:
 class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     """Central state holder and calculator.
 
-    EV Guest does not poll anything: it reacts to price sensor updates, user
-    input and the start/end of planned charging segments.
+    EV Guest does not poll anything: it reacts to price sensor updates, the
+    optional energy meter, user input and the start/end of planned charging
+    segments.
     """
 
     config_entry: EVGuestConfigEntry
@@ -130,14 +173,20 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         self._availability_logged: dict[str, bool] = {}
         self._boundary_callbacks: list[CALLBACK_TYPE] = []
         # Planned charging intervals. This is the source of truth for
-        # charge_now and the plan sensors; charging_schedule is per hour and
-        # only meant for graphs.
+        # charge_now and the plan sensors; charging_schedule is per price
+        # slot and only meant for graphs.
         self._plan_segments: list[Segment] = []
         # Automatic recalculation on price updates is only allowed after the
         # user has requested a calculation, and only until the plan starts.
         self._auto_recalculate = False
         self._error: str | None = None
         self._error_detail: str | None = None
+        # The guest and figures the current plan was made for, for history.
+        self._plan_info: dict[str, Any] | None = None
+        self._recorded = False
+        self._meter_last: float | None = None
+        self.history: list[dict[str, Any]] = []
+        self.settings: dict[str, Any] = dict(DEFAULT_SETTINGS)
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY.format(entry_id=entry.entry_id))
         self.data = EVGuestData(
             inputs={
@@ -149,26 +198,18 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 INPUT_CHARGE_COMPLETION_TIME: DEFAULT_COMPLETION_TIME,
                 INPUT_USE_COMPLETION_TIME: True,
                 INPUT_CONTINUOUS_CHARGING_PREFERRED: True,
+                INPUT_CHARGING_EFFICIENCY: DEFAULT_CHARGING_EFFICIENCY,
             },
             results={
-                RESULT_CHARGING_SPEED: None,
-                RESULT_CHARGE_TIME: None,
-                RESULT_CHARGE_COSTS: None,
-                RESULT_CAR_BRAND: None,
-                RESULT_CAR_MODEL: None,
-                RESULT_CAR_VARIANT: None,
-                RESULT_CAR_BATTERY_CAPACITY: None,
-                ATTR_LAST_LOOKUP: None,
+                **dict.fromkeys(PLAN_RESULTS),
+                **dict.fromkeys(CAR_RESULTS),
                 ATTR_LAST_CALCULATION: None,
-                ATTR_LAST_SOURCE: None,
-                ATTR_VIN: None,
-                ATTR_MODEL_YEAR: None,
-                ATTR_FUEL_TYPE: None,
-                ATTR_MATCH_SCORE: None,
                 ATTR_CHARGING_SCHEDULE: [],
                 ATTR_RAW_TWO_DAYS: [],
                 ATTR_PLAN_MODE: "continuous",
                 ATTR_CHARGING_SEGMENTS: [],
+                RESULT_MEASURED_ENERGY: None,
+                RESULT_MEASURED_COST: None,
             },
             service_health={"motorapi": True, "nhtsa": True, "open_ev_data": True},
         )
@@ -182,19 +223,23 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
 
     @property
     def price_entity(self) -> str:
-        return self.config[CONF_PRICE_ENTITY]
+        return str(self.config[CONF_PRICE_ENTITY])
+
+    @property
+    def energy_entity(self) -> str | None:
+        return self.config.get(CONF_ENERGY_ENTITY) or None
 
     @property
     def currency(self) -> str:
-        return self.config.get(CONF_CURRENCY) or self.hass.config.currency or DEFAULT_CURRENCY
+        return str(self.config.get(CONF_CURRENCY) or self.hass.config.currency or DEFAULT_CURRENCY)
 
     @property
     def country(self) -> str:
-        return self.config.get(CONF_COUNTRY, DEFAULT_COUNTRY)
+        return str(self.config.get(CONF_COUNTRY, DEFAULT_COUNTRY))
 
     @property
     def plate_provider(self) -> str:
-        return self.config.get(CONF_PLATE_PROVIDER) or get_default_plate_provider(self.country)
+        return str(self.config.get(CONF_PLATE_PROVIDER) or get_default_plate_provider(self.country))
 
     @property
     def has_motorapi_key(self) -> bool:
@@ -208,6 +253,13 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         await self._async_load_state()
         self._unsub.append(async_track_state_change_event(self.hass, [self.price_entity], self._handle_price_update))
         self._unsub.append(async_at_started(self.hass, self._async_check_price_entity))
+        if self.energy_entity:
+            if self._meter_last is None:
+                self._meter_last = meter_kwh(self.hass.states.get(self.energy_entity))
+            self._unsub.append(
+                async_track_state_change_event(self.hass, [self.energy_entity], self._handle_meter_update)
+            )
+        self._maybe_record()
         self._schedule_plan_boundaries()
         await self.async_refresh()
 
@@ -240,6 +292,9 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         while self._unsub:
             self._unsub.pop()()
         self._cancel_plan_boundaries()
+        # Write now instead of after the save delay: a reload (e.g. after an
+        # options change) would otherwise load the state from before.
+        await self._store.async_save(self._data_to_store())
         await super().async_shutdown()
 
     async def _async_update_data(self) -> EVGuestData:
@@ -270,6 +325,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         if event.data["new_state"] is not None:
             self._async_check_price_entity()
         if not self._auto_recalculate or self.is_plan_locked():
+            # The panel shows prices, so it still wants to hear about them.
+            self.async_update_listeners()
             return
         self.config_entry.async_create_background_task(
             self.hass, self.async_calculate(manual=False), f"{DOMAIN} recalculate"
@@ -296,6 +353,14 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             self.data.results[RESULT_CHARGE_TIME] = None
         self._plan_segments = parse_segments(stored.get("segments") or [])
         self._auto_recalculate = bool(stored.get("auto_recalculate", False))
+        info = stored.get("plan_info")
+        self._plan_info = info if isinstance(info, dict) else None
+        # Plans from before 0.9.0 have no info and are never added to history.
+        self._recorded = bool(stored.get("recorded", self._plan_info is None))
+        meter = stored.get("meter_last")
+        self._meter_last = float(meter) if isinstance(meter, int | float) else None
+        self.history = [entry for entry in stored.get("history") or [] if isinstance(entry, dict)][:HISTORY_LIMIT]
+        self.settings = {**DEFAULT_SETTINGS, **(stored.get("settings") or {})}
 
     @callback
     def _async_save_state(self) -> None:
@@ -308,6 +373,11 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             "results": dict(self.data.results),
             "segments": serialize_segments(self._plan_segments),
             "auto_recalculate": self._auto_recalculate,
+            "plan_info": self._plan_info,
+            "recorded": self._recorded,
+            "meter_last": self._meter_last,
+            "history": self.history,
+            "settings": self.settings,
         }
 
     # ------------------------------------------------------------------
@@ -322,10 +392,14 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
 
     @property
     def completion_time(self) -> time:
-        return parse_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME)) or parse_time(DEFAULT_COMPLETION_TIME)
+        return parse_time(self.data.inputs.get(INPUT_CHARGE_COMPLETION_TIME)) or time(7)
 
     # ------------------------------------------------------------------
     # Status
+
+    @property
+    def error(self) -> str | None:
+        return self._error
 
     @property
     def error_detail(self) -> str | None:
@@ -349,12 +423,20 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         return STATUS_PLANNED
 
     @property
+    def plan_segments(self) -> list[Segment]:
+        return list(self._plan_segments)
+
+    @property
     def plan_start(self) -> datetime | None:
         return self._plan_segments[0]["start"] if self._plan_segments else None
 
     @property
     def plan_end(self) -> datetime | None:
         return self._plan_segments[-1]["end"] if self._plan_segments else None
+
+    @property
+    def plan_info(self) -> dict[str, Any] | None:
+        return self._plan_info
 
     def _set_service_health(self, service: str, available: bool) -> None:
         current = self.data.service_health.get(service)
@@ -417,6 +499,7 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             normalized.model,
             normalized.variant,
             normalized.model_year,
+            cache=self.hass.data.setdefault(DATASET_CACHE_KEY, {}),
         )
         self._set_service_health("open_ev_data", battery.raw is not None or battery.battery_capacity is None)
 
@@ -484,6 +567,39 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
     # ------------------------------------------------------------------
     # Planning
 
+    def price_slots(self, now: datetime | None = None) -> list[PriceSlot]:
+        """The prices the price sensor has now."""
+        return extract_price_slots(self.hass.states.get(self.price_entity), now or dt_util.now())
+
+    def visible_slots(self, slots: list[PriceSlot]) -> list[PriceSlot]:
+        """Today's and tomorrow's prices, for graphs."""
+        if not slots:
+            return []
+        end = slots[0].start + PLANNING_HORIZON
+        return [slot for slot in slots if slot.start < end]
+
+    def make_plan(self, inputs: Mapping[str, Any], now: datetime | None = None) -> tuple[Plan, list[PriceSlot]]:
+        """Plan with the given inputs; raises PlanError. Nothing is stored."""
+        try:
+            soc = float(inputs[INPUT_SOC])
+            battery_capacity = float(inputs[INPUT_BATTERY_CAPACITY])
+            charger_power = float(inputs[INPUT_CHARGER_POWER])
+            charge_limit = float(inputs[INPUT_CHARGE_LIMIT])
+            efficiency = float(inputs.get(INPUT_CHARGING_EFFICIENCY) or DEFAULT_CHARGING_EFFICIENCY) / 100
+        except (KeyError, TypeError, ValueError) as err:
+            raise PlanError(ERROR_INVALID_INPUT) from err
+        need = charge_need(soc, charge_limit, battery_capacity, charger_power, efficiency)
+
+        now = now or dt_util.now()
+        slots = self.price_slots(now)
+        completion = None
+        if bool(inputs.get(INPUT_USE_COMPLETION_TIME, True)):
+            completion_time = parse_time(inputs.get(INPUT_CHARGE_COMPLETION_TIME)) or time(7)
+            completion = next_completion_datetime(now, completion_time)
+        continuous = bool(inputs.get(INPUT_CONTINUOUS_CHARGING_PREFERRED, True))
+        plan = make_plan(slots, need, charger_power, now, completion, PLANNING_HORIZON, continuous)
+        return plan, slots
+
     async def async_calculate(self, manual: bool = True) -> None:
         """Calculate the cheapest charging plan.
 
@@ -499,12 +615,14 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         elif self.is_plan_locked():
             return
 
+        now = dt_util.now()
         try:
-            calculation = self._calculate_schedule()
+            plan, slots = self.make_plan(self.data.inputs, now)
         except PlanError as err:
             if manual:
                 # Do not keep following an old plan the user tried to replace.
-                self._set_plan([])
+                self._maybe_record(now, ended=True)
+                self._clear_plan()
                 self._async_save_state()
                 self._fail(err.key, cause=err, show_in_status=True)
             if not self._plan_segments:
@@ -512,78 +630,100 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
                 self.async_update_listeners()
             return
 
-        segments = calculation.pop("plan_segments")
-        self.data.results.update(calculation)
-        self.data.results[ATTR_LAST_CALCULATION] = dt_util.now().isoformat()
+        if manual or not self._plan_segments:
+            # A new plan (not an update of one waiting to start) is a new session.
+            self._maybe_record(now, ended=True)
+            self._start_session()
+        visible = self.visible_slots(slots)
+        self.data.results.update(
+            {
+                RESULT_CHARGING_SPEED: round(plan.need.speed_pct_per_hour, 1),
+                RESULT_CHARGE_TIME: plan.need.minutes,
+                RESULT_CHARGE_COSTS: round(plan.cost, 2),
+                RESULT_ENERGY: round(plan.need.grid_kwh, 2),
+                RESULT_SAVINGS: None if plan.savings is None else round(plan.savings, 2),
+                ATTR_CHARGE_NOW_COST: None if plan.charge_now_cost is None else round(plan.charge_now_cost, 2),
+                ATTR_AVERAGE_PRICE: None if plan.average_price is None else round(plan.average_price, 4),
+                ATTR_RAW_TWO_DAYS: [{"start": slot.start.isoformat(), "value": slot.price} for slot in visible],
+                ATTR_CHARGING_SCHEDULE: segments_to_schedule(plan.segments, visible),
+                ATTR_PLAN_MODE: plan.mode,
+                ATTR_LAST_CALCULATION: now.isoformat(),
+            }
+        )
+        self._plan_info = self._describe_plan(plan)
         self._set_error(None)
-        self._set_plan(segments)
+        self._set_plan(plan.segments)
         self._async_save_state()
         self.async_update_listeners()
 
-    def _calculate_schedule(self) -> dict[str, Any]:
-        try:
-            soc = float(self.data.inputs[INPUT_SOC])
-            battery_capacity = float(self.data.inputs[INPUT_BATTERY_CAPACITY])
-            charger_power = float(self.data.inputs[INPUT_CHARGER_POWER])
-            charge_limit = float(self.data.inputs[INPUT_CHARGE_LIMIT])
-        except (TypeError, ValueError) as err:
-            raise PlanError(ERROR_INVALID_INPUT) from err
-        use_completion_time = bool(self.data.inputs.get(INPUT_USE_COMPLETION_TIME, True))
-        continuous = bool(self.data.inputs.get(INPUT_CONTINUOUS_CHARGING_PREFERRED, True))
-
-        if battery_capacity <= 0 or charger_power <= 0 or not 0 <= soc <= 100 or not 0 <= charge_limit <= 100:
-            raise PlanError(ERROR_INVALID_INPUT)
-        if charge_limit <= soc:
-            raise PlanError(ERROR_LIMIT_NOT_ABOVE_SOC)
-
-        speed_pct_per_hour = (charger_power / battery_capacity) * 100
-        energy_needed_kwh = battery_capacity * ((charge_limit - soc) / 100)
-        charge_minutes = ceil((energy_needed_kwh / charger_power) * 60)
-        required_hours = charge_minutes / 60
-        hours_needed = ceil(required_hours)
-
-        now = dt_util.now()
-        prices = extract_price_slots(self.hass.states.get(self.price_entity), now)
-        if not prices:
-            raise PlanError(ERROR_NO_PRICE_DATA)
-
-        visible_prices = prices[:48]
-        self.data.results[ATTR_RAW_TWO_DAYS] = [
-            {"start": start.isoformat(), "value": price} for start, price in visible_prices
-        ]
-
-        planning_prices = prices if use_completion_time else visible_prices
-        valid_prices = [slot for slot in planning_prices if now <= slot[0]]
-        completion_dt = None
-        if use_completion_time:
-            completion_dt = next_completion_datetime(now, self.completion_time)
-            valid_prices = [slot for slot in valid_prices if slot[0] < completion_dt]
-        if len(valid_prices) < hours_needed:
-            raise PlanError(ERROR_NOT_ENOUGH_PRICES)
-
-        if continuous:
-            plan_segments, plan_cost = select_continuous_segments(
-                valid_prices, energy_needed_kwh, required_hours, charge_minutes, completion_dt
-            )
-            mode = "continuous"
-        else:
-            plan_segments, plan_cost = select_split_segments(
-                valid_prices, energy_needed_kwh, required_hours, completion_dt
-            )
-            mode = "split"
-
-        if not plan_segments:
-            raise PlanError(ERROR_NO_WINDOW)
-
-        self.data.results[ATTR_CHARGING_SCHEDULE] = segments_to_schedule(plan_segments, visible_prices)
-        self.data.results[ATTR_PLAN_MODE] = mode
-
+    def _describe_plan(self, plan: Plan) -> dict[str, Any]:
+        """What history needs to know about the guest and the plan."""
+        results = self.data.results
+        car = " ".join(str(part) for part in (results.get(RESULT_CAR_BRAND), results.get(RESULT_CAR_MODEL)) if part)
         return {
-            RESULT_CHARGING_SPEED: round(speed_pct_per_hour, 1),
-            RESULT_CHARGE_TIME: charge_minutes,
-            RESULT_CHARGE_COSTS: round(plan_cost, 2),
-            "plan_segments": plan_segments,
+            "plate": str(self.data.inputs.get(INPUT_LICENSE_PLATE) or ""),
+            "car": car or None,
+            "variant": results.get(RESULT_CAR_VARIANT),
+            "soc": self.data.inputs.get(INPUT_SOC),
+            "limit": self.data.inputs.get(INPUT_CHARGE_LIMIT),
+            "energy": round(plan.need.grid_kwh, 2),
+            "battery_energy": round(plan.need.battery_kwh, 2),
+            "cost": round(plan.cost, 2),
+            "savings": None if plan.savings is None else round(plan.savings, 2),
+            "mode": plan.mode,
+            "currency": self.currency,
+            # The inputs the plan was made with, so the panel can tell when they changed.
+            "inputs": {
+                key: self.data.inputs.get(key)
+                for key in (
+                    INPUT_SOC,
+                    INPUT_CHARGE_LIMIT,
+                    INPUT_BATTERY_CAPACITY,
+                    INPUT_CHARGER_POWER,
+                    INPUT_CHARGING_EFFICIENCY,
+                    INPUT_CHARGE_COMPLETION_TIME,
+                    INPUT_USE_COMPLETION_TIME,
+                    INPUT_CONTINUOUS_CHARGING_PREFERRED,
+                )
+            },
         }
+
+    @callback
+    def _start_session(self) -> None:
+        """A new plan starts a new guest session."""
+        self._recorded = False
+        if self.energy_entity:
+            self.data.results[RESULT_MEASURED_ENERGY] = 0.0
+            self.data.results[RESULT_MEASURED_COST] = 0.0
+            self._meter_last = meter_kwh(self.hass.states.get(self.energy_entity))
+        else:
+            self.data.results[RESULT_MEASURED_ENERGY] = None
+            self.data.results[RESULT_MEASURED_COST] = None
+
+    @callback
+    def _clear_plan(self) -> None:
+        self._set_plan([])
+        for key in PLAN_RESULTS:
+            self.data.results[key] = None
+        self._plan_info = None
+        self._recorded = True
+
+    async def async_new_guest(self) -> None:
+        """Forget the current guest and plan, ready for the next car.
+
+        A plan that has finished is added to the history first.
+        """
+        self._maybe_record(dt_util.now(), ended=True)
+        self._clear_plan()
+        self._set_error(None)
+        self._auto_recalculate = False
+        self.data.inputs[INPUT_LICENSE_PLATE] = ""
+        for key in CAR_RESULTS:
+            self.data.results[key] = None
+        self.data.results[RESULT_MEASURED_ENERGY] = None
+        self.data.results[RESULT_MEASURED_COST] = None
+        self._async_save_state()
+        self.async_update_listeners()
 
     # ------------------------------------------------------------------
     # Plan state and charge_now
@@ -601,12 +741,14 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         """Push a state update exactly when charge_now should change."""
         self._cancel_plan_boundaries()
         now = dt_util.now()
-        for segment in self._plan_segments:
-            for moment in (segment["start"], segment["end"]):
-                if moment > now:
-                    self._boundary_callbacks.append(
-                        async_track_point_in_time(self.hass, self._handle_plan_boundary, moment)
-                    )
+        moments = [moment for segment in self._plan_segments for moment in (segment["start"], segment["end"])]
+        if self._plan_segments and not self._recorded:
+            moments.append(self._plan_segments[-1]["end"] + METER_GRACE)
+        for moment in moments:
+            if moment > now:
+                self._boundary_callbacks.append(
+                    async_track_point_in_time(self.hass, self._handle_plan_boundary, moment)
+                )
 
     @callback
     def _cancel_plan_boundaries(self) -> None:
@@ -614,7 +756,8 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
             self._boundary_callbacks.pop()()
 
     @callback
-    def _handle_plan_boundary(self, _now: datetime) -> None:
+    def _handle_plan_boundary(self, now: datetime) -> None:
+        self._maybe_record(now)
         self.async_update_listeners()
 
     def is_plan_locked(self, now: datetime | None = None) -> bool:
@@ -628,9 +771,97 @@ class EVGuestCoordinator(DataUpdateCoordinator[EVGuestData]):
         now = now or dt_util.now()
         return any(segment["start"] <= now < segment["end"] for segment in self._plan_segments)
 
+    # ------------------------------------------------------------------
+    # Energy meter
+
+    @callback
+    def _handle_meter_update(self, event: Event[EventStateChangedData]) -> None:
+        """Add what the charger's meter counted while the plan was active."""
+        reading = meter_kwh(event.data["new_state"])
+        if reading is None:
+            return
+        last, self._meter_last = self._meter_last, reading
+        start, end = self.plan_start, self.plan_end
+        if last is None or start is None or end is None or self._recorded:
+            return
+        now = dt_util.now()
+        if not start <= now <= end + METER_GRACE:
+            return
+        step = reading - last
+        if step <= 0 or step > MAX_METER_STEP_KWH:
+            # A decrease is a meter reset; the next reading counts again.
+            return
+        energy = float(self.data.results.get(RESULT_MEASURED_ENERGY) or 0.0) + step
+        cost = float(self.data.results.get(RESULT_MEASURED_COST) or 0.0)
+        price = price_at(self.price_slots(now), now)
+        if price is not None:
+            cost += step * price
+        self.data.results[RESULT_MEASURED_ENERGY] = round(energy, 3)
+        self.data.results[RESULT_MEASURED_COST] = round(cost, 2)
+        self._async_save_state()
+        self.async_update_listeners()
+
+    # ------------------------------------------------------------------
+    # History
+
+    @callback
+    def _maybe_record(self, now: datetime | None = None, *, ended: bool = False) -> None:
+        """Add the current plan to the history once it has finished.
+
+        Normally that is a while after the plan ends, so late meter readings
+        are included; ``ended`` records a finished plan right away (before it
+        is replaced).
+        """
+        end = self.plan_end
+        if self._recorded or self._plan_info is None or end is None:
+            return
+        now = now or dt_util.now()
+        if now < end + (timedelta() if ended else METER_GRACE):
+            return
+        results = self.data.results
+        entry = {
+            **self._plan_info,
+            "id": uuid4().hex,
+            "start": self._plan_segments[0]["start"].isoformat(),
+            "end": end.isoformat(),
+            "measured_energy": results.get(RESULT_MEASURED_ENERGY),
+            "measured_cost": results.get(RESULT_MEASURED_COST),
+        }
+        self.history = [entry, *self.history][:HISTORY_LIMIT]
+        self._recorded = True
+        self._async_save_state()
+
+    async def async_delete_history(self, entry_id: str | None) -> None:
+        """Delete one history entry, or all of them."""
+        self.history = [] if entry_id is None else [entry for entry in self.history if entry.get("id") != entry_id]
+        self._async_save_state()
+        self.async_update_listeners()
+
+    async def async_update_settings(self, changes: Mapping[str, Any]) -> None:
+        """Change panel settings for billing guests."""
+        self.settings.update({key: value for key, value in changes.items() if key in DEFAULT_SETTINGS})
+        self._async_save_state()
+        self.async_update_listeners()
+
 
 # ----------------------------------------------------------------------
 # Pure helpers (unit tested directly)
+
+
+def meter_kwh(state: State | None) -> float | None:
+    """An energy meter reading in kWh."""
+    if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        return None
+    try:
+        value = float(state.state)
+    except ValueError:
+        return None
+    unit = state.attributes.get("unit_of_measurement")
+    if unit == UnitOfEnergy.WATT_HOUR:
+        return value / 1000
+    if unit == UnitOfEnergy.MEGA_WATT_HOUR:
+        return value * 1000
+    return value
 
 
 def parse_time(value: Any) -> time | None:
@@ -648,7 +879,7 @@ def parse_time(value: Any) -> time | None:
 
 
 def format_time(value: time | None) -> str:
-    return (value or parse_time(DEFAULT_COMPLETION_TIME)).strftime("%H:%M")  # type: ignore[union-attr]
+    return (value or time(7)).strftime("%H:%M")
 
 
 def next_completion_datetime(now: datetime, completion: time) -> datetime:
@@ -673,105 +904,3 @@ def parse_segments(raw: list[Any]) -> list[Segment]:
             continue
         segments.append({"start": start, "end": end})
     return sorted(segments, key=lambda seg: seg["start"])
-
-
-def _window_cost(window: list[PriceSlot], energy_needed_kwh: float, required_hours: float) -> float:
-    """Cost of charging from the start of ``window``; the last hour may be partial."""
-    energy_per_hour = energy_needed_kwh / required_hours
-    full_hours = int(required_hours)
-    cost = sum(price for _start, price in window[:full_hours]) * energy_per_hour
-    if len(window) > full_hours:
-        cost += window[full_hours][1] * energy_per_hour * (required_hours - full_hours)
-    return cost
-
-
-def select_continuous_segments(
-    valid_prices: list[PriceSlot],
-    energy_needed_kwh: float,
-    required_hours: float,
-    charge_minutes: int,
-    completion_dt: datetime | None,
-) -> tuple[list[Segment], float]:
-    """Cheapest single block of consecutive hours."""
-    hours_needed = ceil(required_hours)
-    best: tuple[list[PriceSlot], float] | None = None
-    for index in range(len(valid_prices) - hours_needed + 1):
-        window = valid_prices[index : index + hours_needed]
-        if completion_dt and window[-1][0] + timedelta(hours=1) > completion_dt:
-            continue
-        cost = _window_cost(window, energy_needed_kwh, required_hours)
-        if best is None or cost < best[1]:
-            best = (window, cost)
-
-    if best is None:
-        return [], 0.0
-    start = best[0][0][0]
-    return [{"start": start, "end": start + timedelta(minutes=charge_minutes)}], best[1]
-
-
-def select_split_segments(
-    valid_prices: list[PriceSlot],
-    energy_needed_kwh: float,
-    required_hours: float,
-    completion_dt: datetime | None,
-) -> tuple[list[Segment], float]:
-    """Cheapest hours, not necessarily adjacent.
-
-    Full hours go to the cheapest slots. A remaining partial hour goes to the
-    next-cheapest slot (the most expensive one chosen), which is the cheapest
-    possible split. Slots must end before the completion time.
-    """
-    candidates = valid_prices
-    if completion_dt:
-        candidates = [slot for slot in valid_prices if slot[0] + timedelta(hours=1) <= completion_dt]
-
-    hours_needed = ceil(required_hours)
-    if len(candidates) < hours_needed:
-        return [], 0.0
-
-    by_price = sorted(candidates, key=lambda item: (item[1], item[0]))[:hours_needed]
-    full_hours = int(required_hours)
-    fraction = required_hours - full_hours
-    energy_per_hour = energy_needed_kwh / required_hours
-
-    full_slots = by_price[:full_hours]
-    full_starts = {start for start, _price in full_slots}
-    total_cost = 0.0
-    segments: list[Segment] = []
-    for start, price in full_slots:
-        segments.append({"start": start, "end": start + timedelta(hours=1)})
-        total_cost += price * energy_per_hour
-
-    if fraction > 1e-9:
-        start, price = by_price[full_hours]
-        duration = timedelta(hours=fraction)
-        slot_end = start + timedelta(hours=1)
-        if slot_end in full_starts:
-            # Place the partial charge at the end of its hour so it joins the
-            # following charging hour instead of leaving a gap.
-            segments.append({"start": slot_end - duration, "end": slot_end})
-        else:
-            segments.append({"start": start, "end": start + duration})
-        total_cost += price * energy_per_hour * fraction
-
-    return merge_segments(segments), total_cost
-
-
-def merge_segments(segments: list[Segment]) -> list[Segment]:
-    merged: list[Segment] = []
-    for segment in sorted(segments, key=lambda seg: seg["start"]):
-        if merged and segment["start"] <= merged[-1]["end"]:
-            merged[-1]["end"] = max(merged[-1]["end"], segment["end"])
-        else:
-            merged.append({"start": segment["start"], "end": segment["end"]})
-    return merged
-
-
-def segments_to_schedule(segments: list[Segment], price_slots: list[PriceSlot]) -> list[dict[str, Any]]:
-    """Per-hour 0/1 view of the plan, aligned with raw_two_days, for graphs."""
-    output: list[dict[str, Any]] = []
-    for start, _price in price_slots:
-        end = start + timedelta(hours=1)
-        active = any(seg["start"] < end and seg["end"] > start for seg in segments)
-        output.append({"start": start.isoformat(), "value": 1.0 if active else 0.0})
-    return output

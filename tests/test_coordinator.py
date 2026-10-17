@@ -32,6 +32,10 @@ CHARGE_TIME = "sensor.ev_guest_charge_time"
 COSTS = "sensor.ev_guest_charge_costs"
 SPEED = "sensor.ev_guest_charging_speed"
 CALCULATE = "button.ev_guest_calculate"
+NEW_GUEST = "button.ev_guest_new_guest"
+ENERGY = "sensor.ev_guest_energy_needed"
+SAVINGS = "sensor.ev_guest_savings"
+EFFICIENCY = "number.ev_guest_charging_efficiency"
 GRAB = "button.ev_guest_grab_car_data"
 SOC = "number.ev_guest_soc_state_of_charge"
 LIMIT = "number.ev_guest_charge_limit"
@@ -82,10 +86,14 @@ async def test_continuous_plan_runs_through_its_states(
 
     assert _state(hass, STATUS).state == "planned"
     assert _state(hass, START).state == "2026-04-09T20:00:00+00:00"
-    assert _state(hass, END).state == "2026-04-10T00:12:00+00:00"
-    assert _state(hass, CHARGE_TIME).state == "252"
-    assert float(_state(hass, COSTS).state) == pytest.approx(14.63, rel=1e-3)
-    assert float(_state(hass, SPEED).state) == pytest.approx(14.3)
+    # 46.2 kWh into the battery at 90 % efficiency: 51.3 kWh from the grid, 4 h 40 min at 11 kW.
+    assert _state(hass, END).state == "2026-04-10T00:40:00+00:00"
+    assert _state(hass, CHARGE_TIME).state == "280"
+    assert float(_state(hass, COSTS).state) == pytest.approx(19.25, rel=1e-3)
+    assert float(_state(hass, SPEED).state) == pytest.approx(12.9)
+    assert float(_state(hass, ENERGY).state) == pytest.approx(51.33, rel=1e-3)
+    # Charging right away from 20:00: 11 kW * (1.80 + 1.50 + 0.40 + 0.30 + 2/3 h * 0.20).
+    assert float(_state(hass, SAVINGS).state) == pytest.approx(26.22, rel=1e-3)
     attrs = _state(hass, STATUS).attributes
     assert attrs["plan_mode"] == "continuous"
     assert attrs["plan_locked"] is False
@@ -97,9 +105,17 @@ async def test_continuous_plan_runs_through_its_states(
     assert _state(hass, CHARGE_NOW).state == STATE_ON
     assert _state(hass, STATUS).attributes["plan_locked"] is True
 
-    await _move(hass, freezer, now + timedelta(hours=6, minutes=12))
+    await _move(hass, freezer, now + timedelta(hours=6, minutes=40))
     assert _state(hass, CHARGE_NOW).state == STATE_OFF
     assert _state(hass, STATUS).state == "completed"
+    assert init_integration.runtime_data.history == []
+
+    # Added to the history a little after the end, for late meter readings.
+    await _move(hass, freezer, now + timedelta(hours=6, minutes=51))
+    [entry] = init_integration.runtime_data.history
+    assert entry["energy"] == pytest.approx(51.33, rel=1e-3)
+    assert entry["cost"] == pytest.approx(19.25, rel=1e-3)
+    assert entry["start"] == "2026-04-09T22:00:00+02:00"
 
 
 async def test_split_plan(hass: HomeAssistant, init_integration: MockConfigEntry, now: datetime) -> None:
@@ -110,8 +126,8 @@ async def test_split_plan(hass: HomeAssistant, init_integration: MockConfigEntry
 
     attrs = _state(hass, STATUS).attributes
     assert attrs["plan_mode"] == "split"
-    assert [seg["start"][11:16] for seg in attrs["charging_segments"]] == ["21:00", "23:00", "00:48"]
-    assert float(_state(hass, COSTS).state) == pytest.approx(23.98, rel=1e-3)
+    assert [seg["start"][11:16] for seg in attrs["charging_segments"]] == ["21:00", "23:00", "00:20"]
+    assert float(_state(hass, COSTS).state) == pytest.approx(31.17, rel=1e-3)
 
 
 async def test_started_plan_is_locked_against_price_updates(
@@ -297,11 +313,15 @@ async def test_entity_registry_unique_ids(hass: HomeAssistant, init_integration:
         "charge_limit",
         "battery_capacity",
         "charger_power",
+        "charging_efficiency",
         "charging_speed",
         "charge_start_time",
         "charge_end_time",
         "charge_time",
         "charge_costs",
+        "energy",
+        "savings",
+        "new_guest",
         "status",
         "car_brand",
         "car_model",
