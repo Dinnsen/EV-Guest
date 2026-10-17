@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv, service
 import voluptuous as vol
 
-from .const import ATTR_CONFIG_ENTRY_ID, DOMAIN, SERVICE_CALCULATE, SERVICE_GRAB_CAR_DATA
+from .const import ATTR_CONFIG_ENTRY_ID, DOMAIN, SERVICE_CALCULATE, SERVICE_GRAB_CAR_DATA, SERVICE_NEW_GUEST
 from .coordinator import EVGuestCoordinator
 
 # "entry_id" is the field name used before 0.8.0 and is still accepted.
@@ -36,8 +36,13 @@ async def _async_calculate(call: ServiceCall) -> None:
     await _get_coordinator(call).async_calculate()
 
 
+async def _async_new_guest(call: ServiceCall) -> None:
+    await _get_coordinator(call).async_new_guest()
+
+
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register the EV Guest actions."""
     hass.services.async_register(DOMAIN, SERVICE_GRAB_CAR_DATA, _async_grab_car_data, schema=SERVICE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_CALCULATE, _async_calculate, schema=SERVICE_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_NEW_GUEST, _async_new_guest, schema=SERVICE_SCHEMA)

@@ -13,7 +13,7 @@
         },
         "data_description": {
           "name": "Vises som enhedens navn, fx EV Guest.",
-          "price_entity": "En sensor med timepriser for i dag og i morgen, fx Energi Data Service eller Nord Pool.",
+          "price_entity": "En sensor med priser for i dag og i morgen (pr. time eller pr. kvarter), fx Energi Data Service eller Nord Pool.",
           "country": "Land der bruges til opslag på nummerplade.",
           "motorapi_api_key": "Valgfri. Hent en gratis nøgle på motorapi.dk. Uden nøgle indtaster du batterikapaciteten selv.",
           "currency": "Valutaen for elpriserne, bruges til ladeomkostningen."
@@ -28,7 +28,7 @@
           "motorapi_api_key": "MotorAPI API-nøgle"
         },
         "data_description": {
-          "price_entity": "En sensor med timepriser for i dag og i morgen, fx Energi Data Service eller Nord Pool.",
+          "price_entity": "En sensor med priser for i dag og i morgen (pr. time eller pr. kvarter), fx Energi Data Service eller Nord Pool.",
           "country": "Land der bruges til opslag på nummerplade.",
           "motorapi_api_key": "Valgfri. Hent en gratis nøgle på motorapi.dk. Uden nøgle indtaster du batterikapaciteten selv."
         }
@@ -45,7 +45,7 @@
       }
     },
     "error": {
-      "invalid_price_entity": "Sensoren har ingen timepriser, som EV Guest kan læse.",
+      "invalid_price_entity": "Sensoren har ingen priser, som EV Guest kan læse.",
       "invalid_auth": "Ugyldig API-nøgle.",
       "cannot_connect": "Kan ikke forbinde til MotorAPI.",
       "timeout": "MotorAPI svarede ikke i tide.",
@@ -63,11 +63,14 @@
       "init": {
         "title": "EV Guest-indstillinger",
         "data": {
-          "currency": "Valuta"
+          "currency": "Valuta",
+          "energy_entity": "Laderens elmåler"
         },
         "data_description": {
-          "currency": "Valutaen for elpriserne, bruges til ladeomkostningen."
-        }
+          "currency": "Valutaen for elpriserne, bruges til ladeomkostningen.",
+          "energy_entity": "Valgfri. En kWh-måler for laderen (samlet energi). EV Guest måler så den energi og pris, der faktisk bruges, mens en plan kører."
+        },
+        "description": "Indstillinger for EV Guest. Ændringer gælder med det samme."
       }
     }
   },
@@ -83,6 +86,9 @@
       },
       "calculate": {
         "name": "Beregn"
+      },
+      "new_guest": {
+        "name": "Ny gæst"
       }
     },
     "number": {
@@ -97,6 +103,9 @@
       },
       "charge_limit": {
         "name": "Ladegrænse"
+      },
+      "charging_efficiency": {
+        "name": "Ladeeffektivitet"
       }
     },
     "sensor": {
@@ -156,6 +165,26 @@
             }
           }
         }
+      },
+      "energy": {
+        "name": "Energibehov"
+      },
+      "savings": {
+        "name": "Besparelse",
+        "state_attributes": {
+          "charge_now_cost": {
+            "name": "Pris ved opladning nu"
+          },
+          "average_price": {
+            "name": "Gennemsnitspris"
+          }
+        }
+      },
+      "measured_energy": {
+        "name": "Målt energi"
+      },
+      "measured_cost": {
+        "name": "Målt pris"
       }
     },
     "switch": {
@@ -197,6 +226,16 @@
           "description": "Den EV Guest der skal bruges. Kan udelades, når der kun er én."
         }
       }
+    },
+    "new_guest": {
+      "name": "Ny gæst",
+      "description": "Rydder nummerplade, bildata og plan, klar til næste bil. En afsluttet plan gemmes i historikken.",
+      "fields": {
+        "config_entry_id": {
+          "name": "EV Guest",
+          "description": "Den EV Guest der skal bruges. Kan udelades, når der kun er én."
+        }
+      }
     }
   },
   "exceptions": {
@@ -232,6 +271,9 @@
     },
     "no_window": {
       "message": "Intet ladevindue passer før færdigtiden."
+    },
+    "entry_not_found": {
+      "message": "EV Guest er ikke sat op eller ikke indlæst."
     }
   },
   "issues": {

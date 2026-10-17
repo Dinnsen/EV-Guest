@@ -12,3 +12,10 @@ calculate:
       selector:
         config_entry:
           integration: ev_guest
+new_guest:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: ev_guest

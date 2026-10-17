@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 import logging
 import re
+import time
 from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
@@ -24,6 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = ClientTimeout(total=20)
 DATASET_TIMEOUT = ClientTimeout(total=30)
+DATASET_MAX_AGE = 24 * 3600
 
 
 class EVGuestError(Exception):
@@ -251,9 +253,14 @@ async def async_lookup_battery_open_ev_data(
     model: str | None,
     variant: str | None,
     model_year: int | None,
+    cache: dict[str, Any] | None = None,
 ) -> BatteryLookupResult:
-    """Look up battery data in Open EV Data."""
-    dataset = await _async_fetch_open_ev_dataset(session)
+    """Look up battery data in Open EV Data.
+
+    The dataset is several megabytes. Pass ``cache`` (any dict that lives on,
+    e.g. in ``hass.data``) to download it at most once a day.
+    """
+    dataset = await _async_cached_dataset(session, cache)
     candidates = _extract_candidates(dataset)
     if not candidates:
         return BatteryLookupResult(None, "Open EV Data", None, None)
@@ -268,6 +275,15 @@ async def async_lookup_battery_open_ev_data(
         return BatteryLookupResult(None, "Open EV Data", best_score, best)
 
     return BatteryLookupResult(best.get("battery_capacity"), "Open EV Data", best_score, best)
+
+
+async def _async_cached_dataset(session: ClientSession, cache: dict[str, Any] | None) -> Any:
+    if cache is not None and cache.get("data") and time.monotonic() - cache.get("fetched", 0.0) < DATASET_MAX_AGE:
+        return cache["data"]
+    dataset = await _async_fetch_open_ev_dataset(session)
+    if cache is not None and dataset:
+        cache.update(data=dataset, fetched=time.monotonic())
+    return dataset
 
 
 async def _async_fetch_open_ev_dataset(session: ClientSession) -> Any:

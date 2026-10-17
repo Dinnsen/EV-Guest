@@ -13,7 +13,7 @@
         },
         "data_description": {
           "name": "Shown as the device name, for example EV Guest.",
-          "price_entity": "A sensor with hourly prices for today and tomorrow, such as Energi Data Service or Nord Pool.",
+          "price_entity": "A sensor with prices for today and tomorrow (hourly or 15-minute), such as Energi Data Service or Nord Pool.",
           "country": "Country used for license plate lookup.",
           "motorapi_api_key": "Optional. Get a free key at motorapi.dk. Without a key, enter battery capacity manually.",
           "currency": "Currency of the electricity prices, used for the charge cost."
@@ -28,7 +28,7 @@
           "motorapi_api_key": "MotorAPI API key"
         },
         "data_description": {
-          "price_entity": "A sensor with hourly prices for today and tomorrow, such as Energi Data Service or Nord Pool.",
+          "price_entity": "A sensor with prices for today and tomorrow (hourly or 15-minute), such as Energi Data Service or Nord Pool.",
           "country": "Country used for license plate lookup.",
           "motorapi_api_key": "Optional. Get a free key at motorapi.dk. Without a key, enter battery capacity manually."
         }
@@ -45,7 +45,7 @@
       }
     },
     "error": {
-      "invalid_price_entity": "The sensor has no hourly prices EV Guest can read.",
+      "invalid_price_entity": "The sensor has no prices EV Guest can read.",
       "invalid_auth": "Invalid API key.",
       "cannot_connect": "Cannot connect to MotorAPI.",
       "timeout": "MotorAPI did not respond in time.",
@@ -63,11 +63,14 @@
       "init": {
         "title": "EV Guest options",
         "data": {
-          "currency": "Currency"
+          "currency": "Currency",
+          "energy_entity": "Charger energy meter"
         },
         "data_description": {
-          "currency": "Currency of the electricity prices, used for the charge cost."
-        }
+          "currency": "Currency of the electricity prices, used for the charge cost.",
+          "energy_entity": "Optional. A kWh meter for the charger (total energy). EV Guest then measures the energy and cost actually used while a plan runs."
+        },
+        "description": "Preferences for EV Guest. Changes apply right away."
       }
     }
   },
@@ -83,6 +86,9 @@
       },
       "calculate": {
         "name": "Calculate"
+      },
+      "new_guest": {
+        "name": "New guest"
       }
     },
     "number": {
@@ -97,6 +103,9 @@
       },
       "charge_limit": {
         "name": "Charge limit"
+      },
+      "charging_efficiency": {
+        "name": "Charging efficiency"
       }
     },
     "sensor": {
@@ -156,6 +165,26 @@
             }
           }
         }
+      },
+      "energy": {
+        "name": "Energy needed"
+      },
+      "savings": {
+        "name": "Savings",
+        "state_attributes": {
+          "charge_now_cost": {
+            "name": "Cost when charging now"
+          },
+          "average_price": {
+            "name": "Average price"
+          }
+        }
+      },
+      "measured_energy": {
+        "name": "Measured energy"
+      },
+      "measured_cost": {
+        "name": "Measured cost"
       }
     },
     "switch": {
@@ -197,6 +226,16 @@
           "description": "The EV Guest to use. Can be left out when there is only one."
         }
       }
+    },
+    "new_guest": {
+      "name": "New guest",
+      "description": "Clears the license plate, the car data and the plan, ready for the next car. A finished plan is kept in the history.",
+      "fields": {
+        "config_entry_id": {
+          "name": "EV Guest",
+          "description": "The EV Guest to use. Can be left out when there is only one."
+        }
+      }
     }
   },
   "exceptions": {
@@ -232,6 +271,9 @@
     },
     "no_window": {
       "message": "No charging window fits before the completion time."
+    },
+    "entry_not_found": {
+      "message": "EV Guest is not set up or not loaded."
     }
   },
   "issues": {
